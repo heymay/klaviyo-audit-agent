@@ -55,7 +55,7 @@ def _get_supabase():
     if _supabase is not None:
         return _supabase
     url = os.environ.get("SUPABASE_URL")
-    key = os.environ.get("SUPABASE_SERVICE_KEY")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_SERVICE_KEY")
     if url and key:
         try:
             from supabase import create_client
@@ -90,14 +90,17 @@ def _fetch(audit_id: str) -> Optional[Dict]:
 
 ALLOWED_ORIGINS = os.environ.get(
     "ALLOWED_ORIGINS",
-    "http://localhost:3000,https://klaviyo-audit.vercel.app",
+    "http://localhost:3000,https://klaviyo-audit-agent.vercel.app",
 ).split(",")
+# Also allow any vercel.app preview deployment
+ALLOWED_ORIGIN_REGEX = r"https://.*\.vercel\.app"
 
 app = FastAPI(title="Klaviyo Audit Katie API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type", "Authorization"],

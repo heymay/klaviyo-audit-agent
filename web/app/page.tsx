@@ -1,5 +1,5 @@
 import AuditForm from "@/components/AuditForm";
-import NPLogoMark from "@/components/NPLogoMark";
+import Image from "next/image";
 
 export default function HomePage() {
   return (
@@ -8,7 +8,7 @@ export default function HomePage() {
       <div className="text-center mb-10">
         {/* Full NP logo lockup */}
         <div className="flex items-center justify-center gap-4 mb-8">
-          <NPLogoMark size={64} />
+          <Image src="/logo.png" alt="National Positions" width={160} height={48} className="object-contain" />
           <div className="text-left">
             <div className="font-black text-2xl tracking-wide text-np-navy leading-none">
               NATIONAL POSITIONS

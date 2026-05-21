@@ -1,13 +1,13 @@
 "use client";
 
-import NPLogoMark from "@/components/NPLogoMark";
+import Image from "next/image";
 
 export default function NPCta() {
   return (
     <div className="bg-np-navy text-white rounded-xl p-8 text-center space-y-4">
       {/* Logo lockup */}
       <div className="flex items-center justify-center gap-3 mb-2">
-        <NPLogoMark size={40} variant="white" />
+        <Image src="/logo.png" alt="National Positions" width={120} height={36} className="object-contain" />
         <div className="text-left">
           <div className="font-black text-base tracking-wide text-white leading-none">
             NATIONAL POSITIONS

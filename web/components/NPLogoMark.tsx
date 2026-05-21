@@ -14,17 +14,17 @@ interface Props {
   variant?: "color" | "white";
 }
 
-const OUTER = 5;
-const CELL  = 20;
-const GAP   = 6;
+const OUTER = 3;
+const CELL  = 22;
+const GAP   = 4;
 const STEP  = CELL + GAP;   // 26
-const VB    = OUTER * 2 + CELL * 4 + GAP * 3;  // 108
+const VB    = OUTER * 2 + CELL * 4 + GAP * 3;  // 106
 
 // Star geometry — center of the star cell (row=2, col=1, 0-indexed)
-const STAR_CX = OUTER + 1 * STEP + CELL / 2;  // 5 + 26 + 10 = 41
-const STAR_CY = OUTER + 2 * STEP + CELL / 2;  // 5 + 52 + 10 = 67
-const STAR_R  = CELL * 0.44;   // outer radius ≈ 8.8
-const STAR_r  = STAR_R * 0.4;  // inner radius ≈ 3.5
+const STAR_CX = OUTER + 1 * STEP + CELL / 2;
+const STAR_CY = OUTER + 2 * STEP + CELL / 2;
+const STAR_R  = CELL * 0.42;   // outer radius
+const STAR_r  = STAR_R * 0.42; // inner radius
 
 function buildStar(cx: number, cy: number, R: number, r: number): string {
   const pts: string[] = [];

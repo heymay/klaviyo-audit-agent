@@ -1,0 +1,108 @@
+{
+  "business_name": "Ember & Oak Co.",
+  "website": "emberandoak.com",
+  "klaviyo_account_name": "Ember & Oak Co. — Klaviyo",
+  "audit_period_label": "Last 12 months",
+  "audit_period_days": 365,
+  "ecommerce_platform": "Shopify",
+  "monthly_revenue_range": "$50,000–$200,000/month",
+  "sms_enabled": false,
+  "ecommerce_events_configured": false,
+
+  "profiles": {
+    "total_profiles": 42000,
+    "emailable_profiles": 38000,
+    "sms_consented_profiles": 0,
+    "suppressed_profiles": 4000,
+    "engaged_30_day": 1200,
+    "engaged_60_day": 2800,
+    "engaged_90_day": 4200,
+    "engaged_180_day": 8500
+  },
+
+  "flows": [
+    {
+      "flow_id": "fl_001",
+      "name": "Welcome Email",
+      "status": "Live",
+      "trigger_type": "list_subscribe",
+      "revenue": 4200.0,
+      "conversion_rate": 0.02,
+      "last_updated_days_ago": 420,
+      "messages": [
+        {"channel": "email", "position": 1, "delay_minutes": 120, "has_discount": false}
+      ]
+    }
+  ],
+
+  "campaigns": {
+    "total_sent": 14,
+    "email_campaigns": 14,
+    "sms_campaigns": 0,
+    "avg_open_rate": 0.11,
+    "avg_click_rate": 0.008,
+    "avg_unsubscribe_rate": 0.007,
+    "avg_spam_complaint_rate": 0.0012,
+    "avg_hard_bounce_rate": 0.022,
+    "pct_to_engaged_segments": 0.05,
+    "total_revenue": 9800.0,
+    "weeks_in_period": 52,
+    "longest_gap_days": 45,
+    "open_rate_trend": "declining"
+  },
+
+  "forms": [
+    {
+      "form_id": "fm_001",
+      "name": "Footer Email Signup",
+      "form_type": "embed",
+      "status": "Published",
+      "views": 85000,
+      "submits": 510,
+      "mobile_views": 55000,
+      "mobile_submits": 220,
+      "collects_sms": false,
+      "has_incentive": false
+    }
+  ],
+
+  "deliverability": {
+    "hard_bounce_rate": 0.022,
+    "soft_bounce_rate": 0.008,
+    "spam_complaint_rate": 0.0012,
+    "avg_unsubscribe_rate": 0.007,
+    "has_spf": false,
+    "has_dkim": false,
+    "has_dmarc": false,
+    "has_branded_sending_domain": false,
+    "open_rate_trend": "declining"
+  },
+
+  "revenue": {
+    "total_klaviyo_revenue": 14000.0,
+    "campaign_revenue": 9800.0,
+    "flow_revenue": 4200.0,
+    "revenue_attribution_configured": false,
+    "benchmarks": {
+      "open_rate_rating": "poor",
+      "click_rate_rating": "poor",
+      "conversion_rate_rating": "poor",
+      "flow_revenue_rating": "poor",
+      "list_growth_rating": "below_average"
+    }
+  },
+
+  "billing": {
+    "plan_tier": "Klaviyo Email — 50,000 profiles",
+    "plan_profile_limit": 50000
+  },
+
+  "segmentation": {
+    "has_engaged_30_segment": false,
+    "has_engaged_90_segment": false,
+    "has_vip_segment": false,
+    "has_purchaser_segment": false,
+    "has_sunset_segment": false,
+    "pct_campaigns_to_engaged": 0.05
+  }
+}

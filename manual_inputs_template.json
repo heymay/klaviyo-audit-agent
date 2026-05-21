@@ -1,0 +1,140 @@
+{
+  "_instructions": [
+    "Copy this file to manual_inputs.json and fill in all fields before running a live audit.",
+    "Fields marked REQUIRED must be filled in — they cannot be derived from the Klaviyo API.",
+    "Fields marked OPTIONAL can be left at their defaults if data is unavailable.",
+    "Run: python3 -m src.audit --live --manual manual_inputs.json --context context.json"
+  ],
+
+  "profiles": {
+    "_note": "Pull these from Klaviyo: Analytics → Profiles, or from Klaviyo segment membership counts.",
+    "emailable_profiles": 0,
+    "sms_consented_profiles": 0,
+    "suppressed_profiles": 0,
+    "engaged_30_day": 0,
+    "engaged_60_day": 0,
+    "engaged_90_day": 0,
+    "engaged_180_day": 0
+  },
+
+  "campaigns": {
+    "_note": "Pull from Klaviyo: Analytics → Campaigns → select the audit date range.",
+    "avg_open_rate": 0.0,
+    "avg_click_rate": 0.0,
+    "avg_unsubscribe_rate": 0.0,
+    "avg_spam_complaint_rate": 0.0,
+    "avg_hard_bounce_rate": 0.0,
+    "pct_to_engaged_segments": 0.0,
+    "open_rate_trend": "flat"
+  },
+
+  "deliverability": {
+    "_note": "SPF/DKIM/DMARC: check via MXToolbox or Klaviyo Settings → Email → Sending Domain. Rates: from campaign analytics.",
+    "hard_bounce_rate": 0.0,
+    "soft_bounce_rate": 0.0,
+    "spam_complaint_rate": 0.0,
+    "avg_unsubscribe_rate": 0.0,
+    "has_spf": false,
+    "has_dkim": false,
+    "has_dmarc": false,
+    "has_branded_sending_domain": false,
+    "open_rate_trend": "flat"
+  },
+
+  "flows": {
+    "_note": "Keyed by any substring of the flow name (case-insensitive). Add flow revenue from Klaviyo Analytics → Flows.",
+    "_example_structure": {
+      "welcome": {
+        "revenue": 0.0,
+        "conversion_rate": 0.0,
+        "messages": [
+          {"delay_minutes": 5, "has_discount": true},
+          {"delay_minutes": 2880, "has_discount": false}
+        ]
+      }
+    },
+    "welcome": {
+      "revenue": 0.0,
+      "conversion_rate": 0.0,
+      "messages": []
+    },
+    "abandoned cart": {
+      "revenue": 0.0,
+      "conversion_rate": 0.0,
+      "messages": []
+    },
+    "browse abandonment": {
+      "revenue": 0.0,
+      "conversion_rate": 0.0,
+      "messages": []
+    },
+    "post-purchase": {
+      "revenue": 0.0,
+      "conversion_rate": 0.0,
+      "messages": []
+    },
+    "winback": {
+      "revenue": 0.0,
+      "conversion_rate": 0.0,
+      "messages": []
+    },
+    "vip": {
+      "revenue": 0.0,
+      "conversion_rate": 0.0,
+      "messages": []
+    }
+  },
+
+  "forms": [
+    {
+      "_note": "Add one entry per active signup form. Name must match the form name in Klaviyo.",
+      "name": "Homepage Popup",
+      "form_type": "popup",
+      "status": "Published",
+      "views": 0,
+      "submits": 0,
+      "mobile_views": 0,
+      "mobile_submits": 0,
+      "collects_sms": false,
+      "has_incentive": false
+    }
+  ],
+
+  "revenue": {
+    "_note": "Pull from Klaviyo: Analytics → Revenue. Set revenue_attribution_configured to false if Placed Order metric is missing.",
+    "total_klaviyo_revenue": 0.0,
+    "campaign_revenue": 0.0,
+    "flow_revenue": 0.0,
+    "revenue_attribution_configured": true
+  },
+
+  "benchmarks": {
+    "_note": "OPTIONAL. Set ratings based on Klaviyo benchmark comparison if available. Values: poor | below_average | average | good | excellent",
+    "open_rate_rating": "average",
+    "click_rate_rating": "average",
+    "conversion_rate_rating": "average",
+    "flow_revenue_rating": "average",
+    "list_growth_rating": "average"
+  },
+
+  "billing": {
+    "_note": "Pull from Klaviyo: Settings → Billing. plan_profile_limit is the profile count included in the plan.",
+    "plan_tier": "",
+    "plan_profile_limit": 0
+  },
+
+  "segmentation": {
+    "_note": "OPTIONAL. Overrides auto-detection from segment/list names. Leave out keys to use auto-detection.",
+    "_auto_detect_note": "The system auto-detects segments by name pattern. Only override here if names are ambiguous.",
+    "has_engaged_30_segment": null,
+    "has_engaged_90_segment": null,
+    "has_vip_segment": null,
+    "has_purchaser_segment": null,
+    "has_sunset_segment": null
+  },
+
+  "account_context": {
+    "_note": "sms_enabled: null = auto-detect from API data. Set to true/false to override.",
+    "sms_enabled": null
+  }
+}

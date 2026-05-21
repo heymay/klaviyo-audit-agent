@@ -6,8 +6,13 @@ export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const res = await fetch(`${API_URL}/audits/${id}`);
-  const data = await res.json();
-  return NextResponse.json(data, { status: res.status });
+  try {
+    const { id } = await params;
+    const res = await fetch(`${API_URL}/audits/${id}`, { cache: "no-store" });
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
+  } catch (err) {
+    console.error("[audit/status]", err);
+    return NextResponse.json({ detail: "Could not reach the audit service." }, { status: 502 });
+  }
 }

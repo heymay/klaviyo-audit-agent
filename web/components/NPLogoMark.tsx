@@ -10,6 +10,8 @@
 interface Props {
   size?: number;
   className?: string;
+  /** "color" = red squares on transparent (default); "white" = white squares on transparent */
+  variant?: "color" | "white";
 }
 
 const OUTER = 5;
@@ -40,8 +42,11 @@ const NAVY  = "#1B2D50";
 const STAR_CELL_ROW = 2;  // 0-indexed
 const STAR_CELL_COL = 1;  // 0-indexed
 
-export default function NPLogoMark({ size = 40, className = "" }: Props) {
+export default function NPLogoMark({ size = 40, className = "", variant = "color" }: Props) {
   const starPoints = buildStar(STAR_CX, STAR_CY, STAR_R, STAR_r);
+  const squareFill = variant === "white" ? "white" : RED;
+  const starFill   = variant === "white" ? NAVY    : NAVY;
+  const starBg     = variant === "white" ? "white" : "white";
 
   return (
     <svg
@@ -65,13 +70,13 @@ export default function NPLogoMark({ size = 40, className = "" }: Props) {
               y={y}
               width={CELL}
               height={CELL}
-              fill={isStar ? "white" : RED}
+              fill={isStar ? starBg : squareFill}
             />
           );
         })
       )}
-      {/* Navy star centred in the star cell */}
-      <polygon points={starPoints} fill={NAVY} />
+      {/* Star centred in the star cell */}
+      <polygon points={starPoints} fill={starFill} />
     </svg>
   );
 }

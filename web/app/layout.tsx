@@ -26,7 +26,7 @@ export default function RootLayout({
               href="/"
               className="flex items-center gap-3 hover:opacity-90 transition-opacity"
             >
-              <NPLogoMark size={36} />
+              <NPLogoMark size={36} variant="white" />
               <div className="flex flex-col leading-none">
                 <span className="font-bold text-base tracking-wide text-white">
                   NATIONAL POSITIONS
@@ -61,7 +61,7 @@ export default function RootLayout({
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
               {/* Footer logo */}
               <div className="flex items-center gap-3">
-                <NPLogoMark size={28} />
+                <NPLogoMark size={28} variant="white" />
                 <div className="flex flex-col leading-none">
                   <span className="font-bold text-sm tracking-wide text-white">
                     NATIONAL POSITIONS

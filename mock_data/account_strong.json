@@ -1,0 +1,220 @@
+{
+  "business_name": "Veldt Athletics",
+  "website": "veldtathletics.com",
+  "klaviyo_account_name": "Veldt Athletics — Klaviyo",
+  "audit_period_label": "Last 12 months",
+  "audit_period_days": 365,
+  "ecommerce_platform": "Shopify",
+  "monthly_revenue_range": "Over $1,000,000/month",
+  "sms_enabled": true,
+  "ecommerce_events_configured": true,
+
+  "profiles": {
+    "total_profiles": 185000,
+    "emailable_profiles": 168000,
+    "sms_consented_profiles": 42000,
+    "suppressed_profiles": 17000,
+    "engaged_30_day": 48000,
+    "engaged_60_day": 82000,
+    "engaged_90_day": 108000,
+    "engaged_180_day": 138000
+  },
+
+  "flows": [
+    {
+      "flow_id": "fl_001",
+      "name": "Welcome Series",
+      "status": "Live",
+      "trigger_type": "list_subscribe",
+      "revenue": 185000.0,
+      "conversion_rate": 0.10,
+      "last_updated_days_ago": 45,
+      "messages": [
+        {"channel": "email", "position": 1, "delay_minutes": 5, "has_discount": true},
+        {"channel": "sms", "position": 2, "delay_minutes": 60, "has_discount": false},
+        {"channel": "email", "position": 3, "delay_minutes": 2880, "has_discount": false},
+        {"channel": "email", "position": 4, "delay_minutes": 7200, "has_discount": false},
+        {"channel": "email", "position": 5, "delay_minutes": 14400, "has_discount": true}
+      ]
+    },
+    {
+      "flow_id": "fl_002",
+      "name": "Abandoned Cart Recovery",
+      "status": "Live",
+      "trigger_type": "started_checkout",
+      "revenue": 310000.0,
+      "conversion_rate": 0.12,
+      "last_updated_days_ago": 30,
+      "messages": [
+        {"channel": "sms", "position": 1, "delay_minutes": 30, "has_discount": false},
+        {"channel": "email", "position": 2, "delay_minutes": 60, "has_discount": false},
+        {"channel": "email", "position": 3, "delay_minutes": 1440, "has_discount": false},
+        {"channel": "email", "position": 4, "delay_minutes": 2880, "has_discount": true}
+      ]
+    },
+    {
+      "flow_id": "fl_003",
+      "name": "Browse Abandonment",
+      "status": "Live",
+      "trigger_type": "viewed_product",
+      "revenue": 88000.0,
+      "conversion_rate": 0.04,
+      "last_updated_days_ago": 60,
+      "messages": [
+        {"channel": "email", "position": 1, "delay_minutes": 60, "has_discount": false},
+        {"channel": "email", "position": 2, "delay_minutes": 1440, "has_discount": false}
+      ]
+    },
+    {
+      "flow_id": "fl_004",
+      "name": "Post-Purchase Thank You",
+      "status": "Live",
+      "trigger_type": "placed_order",
+      "revenue": 142000.0,
+      "conversion_rate": 0.08,
+      "last_updated_days_ago": 90,
+      "messages": [
+        {"channel": "email", "position": 1, "delay_minutes": 30, "has_discount": false},
+        {"channel": "email", "position": 2, "delay_minutes": 4320, "has_discount": false},
+        {"channel": "email", "position": 3, "delay_minutes": 10080, "has_discount": false},
+        {"channel": "email", "position": 4, "delay_minutes": 20160, "has_discount": false}
+      ]
+    },
+    {
+      "flow_id": "fl_005",
+      "name": "Win Back — We Miss You",
+      "status": "Live",
+      "trigger_type": "segment_trigger",
+      "revenue": 47000.0,
+      "conversion_rate": 0.06,
+      "last_updated_days_ago": 120,
+      "messages": [
+        {"channel": "email", "position": 1, "delay_minutes": 0, "has_discount": false},
+        {"channel": "email", "position": 2, "delay_minutes": 2880, "has_discount": false},
+        {"channel": "email", "position": 3, "delay_minutes": 7200, "has_discount": true}
+      ]
+    },
+    {
+      "flow_id": "fl_006",
+      "name": "Added to Cart Reminder",
+      "status": "Live",
+      "trigger_type": "added_to_cart",
+      "revenue": 38000.0,
+      "conversion_rate": 0.05,
+      "last_updated_days_ago": 75,
+      "messages": [
+        {"channel": "email", "position": 1, "delay_minutes": 120, "has_discount": false},
+        {"channel": "sms", "position": 2, "delay_minutes": 240, "has_discount": false}
+      ]
+    },
+    {
+      "flow_id": "fl_007",
+      "name": "VIP Loyalty Program",
+      "status": "Live",
+      "trigger_type": "segment_trigger",
+      "revenue": 95000.0,
+      "conversion_rate": 0.14,
+      "last_updated_days_ago": 30,
+      "messages": [
+        {"channel": "email", "position": 1, "delay_minutes": 0, "has_discount": true},
+        {"channel": "sms", "position": 2, "delay_minutes": 1440, "has_discount": false},
+        {"channel": "email", "position": 3, "delay_minutes": 10080, "has_discount": true}
+      ]
+    }
+  ],
+
+  "campaigns": {
+    "total_sent": 118,
+    "email_campaigns": 104,
+    "sms_campaigns": 14,
+    "avg_open_rate": 0.36,
+    "avg_click_rate": 0.048,
+    "avg_unsubscribe_rate": 0.0015,
+    "avg_spam_complaint_rate": 0.00022,
+    "avg_hard_bounce_rate": 0.0025,
+    "pct_to_engaged_segments": 0.88,
+    "total_revenue": 842000.0,
+    "weeks_in_period": 52,
+    "longest_gap_days": 9,
+    "open_rate_trend": "improving"
+  },
+
+  "forms": [
+    {
+      "form_id": "fm_001",
+      "name": "Hero Popup — 10% Off",
+      "form_type": "popup",
+      "status": "Published",
+      "views": 620000,
+      "submits": 31000,
+      "mobile_views": 390000,
+      "mobile_submits": 17550,
+      "collects_sms": true,
+      "has_incentive": true
+    },
+    {
+      "form_id": "fm_002",
+      "name": "Exit Intent — Free Shipping",
+      "form_type": "popup",
+      "status": "Published",
+      "views": 185000,
+      "submits": 7400,
+      "mobile_views": 80000,
+      "mobile_submits": 2800,
+      "collects_sms": true,
+      "has_incentive": true
+    },
+    {
+      "form_id": "fm_003",
+      "name": "Footer Embed",
+      "form_type": "embed",
+      "status": "Published",
+      "views": 480000,
+      "submits": 9600,
+      "mobile_views": 250000,
+      "mobile_submits": 4500,
+      "collects_sms": false,
+      "has_incentive": false
+    }
+  ],
+
+  "deliverability": {
+    "hard_bounce_rate": 0.0025,
+    "soft_bounce_rate": 0.0018,
+    "spam_complaint_rate": 0.00022,
+    "avg_unsubscribe_rate": 0.0015,
+    "has_spf": true,
+    "has_dkim": true,
+    "has_dmarc": true,
+    "has_branded_sending_domain": true,
+    "open_rate_trend": "improving"
+  },
+
+  "revenue": {
+    "total_klaviyo_revenue": 1747000.0,
+    "campaign_revenue": 842000.0,
+    "flow_revenue": 905000.0,
+    "revenue_attribution_configured": true,
+    "benchmarks": {
+      "open_rate_rating": "excellent",
+      "click_rate_rating": "good",
+      "conversion_rate_rating": "good",
+      "flow_revenue_rating": "excellent",
+      "list_growth_rating": "good"
+    }
+  },
+
+  "billing": {
+    "plan_tier": "Klaviyo Email + SMS — 200,000 profiles",
+    "plan_profile_limit": 200000
+  },
+
+  "segmentation": {
+    "has_engaged_30_segment": true,
+    "has_engaged_90_segment": true,
+    "has_vip_segment": true,
+    "has_purchaser_segment": true,
+    "has_sunset_segment": true,
+    "pct_campaigns_to_engaged": 0.88
+  }
+}

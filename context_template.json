@@ -1,0 +1,9 @@
+{
+  "_instructions": "Copy to context.json and fill in before running a live audit.",
+  "business_name": "",
+  "website": "",
+  "audit_period_label": "Last 12 months",
+  "audit_period_days": 365,
+  "ecommerce_platform": "Shopify",
+  "monthly_revenue_range": ""
+}

@@ -1,5 +1,11 @@
+[providers]
+  providers = ["python"]
+
+[phases.setup]
+nixPkgs = ["python311", "python311Packages.pip"]
+
 [phases.install]
-cmds = ["pip install -r api/requirements.txt"]
+cmds = ["pip3 install -r api/requirements.txt"]
 
 [start]
 cmd = "uvicorn api.main:app --host 0.0.0.0 --port $PORT"

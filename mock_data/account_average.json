@@ -1,0 +1,148 @@
+{
+  "business_name": "Solara Skincare",
+  "website": "solaraskincare.com",
+  "klaviyo_account_name": "Solara Skincare — Klaviyo",
+  "audit_period_label": "Last 12 months",
+  "audit_period_days": 365,
+  "ecommerce_platform": "Shopify",
+  "monthly_revenue_range": "$200,000–$1,000,000/month",
+  "sms_enabled": true,
+  "ecommerce_events_configured": true,
+
+  "profiles": {
+    "total_profiles": 95000,
+    "emailable_profiles": 84000,
+    "sms_consented_profiles": 7500,
+    "suppressed_profiles": 11000,
+    "engaged_30_day": 9200,
+    "engaged_60_day": 17800,
+    "engaged_90_day": 26500,
+    "engaged_180_day": 41000
+  },
+
+  "flows": [
+    {
+      "flow_id": "fl_001",
+      "name": "Welcome Series",
+      "status": "Live",
+      "trigger_type": "list_subscribe",
+      "revenue": 38500.0,
+      "conversion_rate": 0.06,
+      "last_updated_days_ago": 90,
+      "messages": [
+        {"channel": "email", "position": 1, "delay_minutes": 5, "has_discount": true},
+        {"channel": "email", "position": 2, "delay_minutes": 2880, "has_discount": false},
+        {"channel": "email", "position": 3, "delay_minutes": 7200, "has_discount": false}
+      ]
+    },
+    {
+      "flow_id": "fl_002",
+      "name": "Abandoned Cart Recovery",
+      "status": "Live",
+      "trigger_type": "started_checkout",
+      "revenue": 72000.0,
+      "conversion_rate": 0.08,
+      "last_updated_days_ago": 60,
+      "messages": [
+        {"channel": "email", "position": 1, "delay_minutes": 60, "has_discount": false},
+        {"channel": "email", "position": 2, "delay_minutes": 1440, "has_discount": true}
+      ]
+    },
+    {
+      "flow_id": "fl_003",
+      "name": "Post-Purchase Thank You",
+      "status": "Live",
+      "trigger_type": "placed_order",
+      "revenue": 22000.0,
+      "conversion_rate": 0.04,
+      "last_updated_days_ago": 180,
+      "messages": [
+        {"channel": "email", "position": 1, "delay_minutes": 30, "has_discount": false},
+        {"channel": "email", "position": 2, "delay_minutes": 10080, "has_discount": false}
+      ]
+    }
+  ],
+
+  "campaigns": {
+    "total_sent": 62,
+    "email_campaigns": 58,
+    "sms_campaigns": 4,
+    "avg_open_rate": 0.22,
+    "avg_click_rate": 0.025,
+    "avg_unsubscribe_rate": 0.0025,
+    "avg_spam_complaint_rate": 0.00045,
+    "avg_hard_bounce_rate": 0.0055,
+    "pct_to_engaged_segments": 0.35,
+    "total_revenue": 185000.0,
+    "weeks_in_period": 52,
+    "longest_gap_days": 18,
+    "open_rate_trend": "flat"
+  },
+
+  "forms": [
+    {
+      "form_id": "fm_001",
+      "name": "Homepage Popup",
+      "form_type": "popup",
+      "status": "Published",
+      "views": 220000,
+      "submits": 4840,
+      "mobile_views": 140000,
+      "mobile_submits": 2240,
+      "collects_sms": true,
+      "has_incentive": true
+    },
+    {
+      "form_id": "fm_002",
+      "name": "Footer Embed",
+      "form_type": "embed",
+      "status": "Published",
+      "views": 180000,
+      "submits": 900,
+      "mobile_views": 90000,
+      "mobile_submits": 360,
+      "collects_sms": false,
+      "has_incentive": false
+    }
+  ],
+
+  "deliverability": {
+    "hard_bounce_rate": 0.0055,
+    "soft_bounce_rate": 0.003,
+    "spam_complaint_rate": 0.00045,
+    "avg_unsubscribe_rate": 0.0025,
+    "has_spf": true,
+    "has_dkim": true,
+    "has_dmarc": false,
+    "has_branded_sending_domain": true,
+    "open_rate_trend": "flat"
+  },
+
+  "revenue": {
+    "total_klaviyo_revenue": 317500.0,
+    "campaign_revenue": 185000.0,
+    "flow_revenue": 132500.0,
+    "revenue_attribution_configured": true,
+    "benchmarks": {
+      "open_rate_rating": "average",
+      "click_rate_rating": "average",
+      "conversion_rate_rating": "average",
+      "flow_revenue_rating": "below_average",
+      "list_growth_rating": "average"
+    }
+  },
+
+  "billing": {
+    "plan_tier": "Klaviyo Email + SMS — 100,000 profiles",
+    "plan_profile_limit": 100000
+  },
+
+  "segmentation": {
+    "has_engaged_30_segment": true,
+    "has_engaged_90_segment": true,
+    "has_vip_segment": false,
+    "has_purchaser_segment": true,
+    "has_sunset_segment": false,
+    "pct_campaigns_to_engaged": 0.35
+  }
+}

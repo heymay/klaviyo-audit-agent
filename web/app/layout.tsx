@@ -24,17 +24,9 @@ export default function RootLayout({
             {/* Logo lockup */}
             <a
               href="/"
-              className="flex items-center gap-3 hover:opacity-90 transition-opacity"
+              className="hover:opacity-90 transition-opacity"
             >
-              <Image src="/logo.png" alt="National Positions" width={120} height={36} className="object-contain" />
-              <div className="flex flex-col leading-none">
-                <span className="font-bold text-base tracking-wide text-white">
-                  NATIONAL POSITIONS
-                </span>
-                <span className="text-[10px] tracking-[0.18em] text-np-gray uppercase mt-0.5">
-                  Profitable Internet Marketing
-                </span>
-              </div>
+              <Image src="/logo.png" alt="National Positions" width={120} height={36} className="object-contain brightness-0 invert" />
             </a>
 
             {/* Right side */}
@@ -60,16 +52,8 @@ export default function RootLayout({
           <div className="max-w-6xl mx-auto px-4 sm:px-6">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
               {/* Footer logo */}
-              <div className="flex items-center gap-3">
-                <Image src="/logo.png" alt="National Positions" width={100} height={30} className="object-contain" />
-                <div className="flex flex-col leading-none">
-                  <span className="font-bold text-sm tracking-wide text-white">
-                    NATIONAL POSITIONS
-                  </span>
-                  <span className="text-[9px] tracking-[0.15em] text-np-gray uppercase mt-0.5">
-                    Profitable Internet Marketing
-                  </span>
-                </div>
+              <div className="flex items-center">
+                <Image src="/logo.png" alt="National Positions" width={100} height={30} className="object-contain brightness-0 invert" />
               </div>
               {/* Footer links / disclaimer */}
               <div className="text-center sm:text-right space-y-1">

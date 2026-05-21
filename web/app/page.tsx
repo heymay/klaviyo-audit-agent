@@ -6,17 +6,9 @@ export default function HomePage() {
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-12">
       {/* Hero */}
       <div className="text-center mb-10">
-        {/* Full NP logo lockup */}
-        <div className="flex items-center justify-center gap-4 mb-8">
+        {/* NP logo */}
+        <div className="flex items-center justify-center mb-8">
           <Image src="/logo.png" alt="National Positions" width={160} height={48} className="object-contain" />
-          <div className="text-left">
-            <div className="font-black text-2xl tracking-wide text-np-navy leading-none">
-              NATIONAL POSITIONS
-            </div>
-            <div className="text-[11px] tracking-[0.2em] text-np-gray uppercase mt-1">
-              Profitable Internet Marketing
-            </div>
-          </div>
         </div>
 
         {/* Divider */}

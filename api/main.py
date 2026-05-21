@@ -63,6 +63,8 @@ def _get_supabase():
             log.info("Supabase client initialised.")
         except ImportError:
             log.warning("supabase-py not installed — results will not persist.")
+        except Exception as e:
+            log.warning(f"Supabase init failed ({e}) — falling back to in-memory store.")
     return _supabase
 
 

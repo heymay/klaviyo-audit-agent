@@ -1,11 +1,13 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import Image from "next/image";
 import ProgressPoller from "@/components/ProgressPoller";
 import ScoreGauge from "@/components/ScoreGauge";
 import CategoryScores from "@/components/CategoryScores";
 import FindingsList from "@/components/FindingsList";
 import ActionPlan from "@/components/ActionPlan";
 import NPCta from "@/components/NPCta";
+import PrintButton from "@/components/PrintButton";
 import type { AuditReport, AuditStatus } from "@/types/audit";
 
 const API_URL = process.env.AUDIT_API_URL ?? "http://localhost:8000";
@@ -96,6 +98,21 @@ export default async function ReportPage({
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-10 space-y-8">
+
+      {/* Print-only header with NP logo */}
+      <div className="print-header hidden items-center justify-between border-b border-gray-200 pb-4 mb-2">
+        <Image src="/logo.png" alt="National Positions" width={160} height={48} className="object-contain" />
+        <div className="text-right text-xs text-gray-500">
+          <div>Klaviyo Account Audit</div>
+          <div>{new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</div>
+        </div>
+      </div>
+
+      {/* Print button */}
+      <div className="flex justify-end print-hide">
+        <PrintButton />
+      </div>
+
       {/* Header */}
       <div className="card">
         <div className="flex flex-col sm:flex-row gap-6 items-center sm:items-start">

@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+@media print {
+  /* Hide nav, header, footer, CTA, and print button */
+  header, footer, .np-cta, .print-hide { display: none !important; }
+
+  /* Show the print header with logo */
+  .print-header { display: flex !important; }
+
+  body { background: white !important; font-size: 12px; }
+  .card { box-shadow: none !important; border: 1px solid #e5e7eb !important; }
+
+  /* Avoid page breaks inside cards */
+  .card, .finding-item { break-inside: avoid; }
+
+  /* Keep colors in print */
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
 @layer base {
   body {
     @apply bg-np-light text-gray-900 font-sans antialiased;

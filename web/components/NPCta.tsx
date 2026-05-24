@@ -4,7 +4,7 @@ import Image from "next/image";
 
 export default function NPCta() {
   return (
-    <div className="bg-np-navy text-white rounded-xl p-8 text-center space-y-4">
+    <div className="np-cta bg-np-navy text-white rounded-xl p-8 text-center space-y-4">
       {/* Logo */}
       <div className="flex items-center justify-center mb-2">
         <Image src="/logo.png" alt="National Positions" width={120} height={36} className="object-contain brightness-0 invert" />

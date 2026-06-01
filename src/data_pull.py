@@ -481,9 +481,11 @@ def pull_all(client: KlaviyoClient, website: str = "") -> Dict[str, Any]:
     print("  [6/7] Pulling profile count...")
     total_profiles = _safe_pull("profiles", lambda: _pull_total_profile_count(client), fallback=0) or 0
 
-    print("  [7/7] Pulling forms and checking DNS records...")
+    print("  [7/7] Pulling forms...")
     forms_raw = _safe_pull("forms", lambda: _pull_forms(client), fallback=[])
-    dns = check_dns(website) if website else {"has_spf": None, "has_dkim": None, "has_dmarc": None}
+    # DNS checks removed — outbound DNS-over-HTTPS blocked on Railway.
+    # None → normalizer defaults to True (benefit of doubt), no false findings fire.
+    dns: Dict[str, Optional[bool]] = {"has_spf": None, "has_dkim": None, "has_dmarc": None}
 
     # Derive campaign channel counts
     email_campaigns = [c for c in campaigns_raw if c["channel"] == "email"]

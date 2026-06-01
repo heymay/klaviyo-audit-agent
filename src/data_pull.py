@@ -20,6 +20,7 @@ Fields that still require manual input:
 """
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import logging
 import time
@@ -64,64 +65,86 @@ def _safe_pull(label: str, fn, fallback=None):
 
 # ── DNS checks (SPF / DKIM / DMARC) via Cloudflare DoH ───────────────────
 
-def _dns_txt(domain: str, timeout: int = 6) -> List[str]:
-    """Return TXT records for domain using Cloudflare DNS-over-HTTPS."""
-    url = f"https://cloudflare-dns.com/dns-query?name={urllib.parse.quote(domain)}&type=TXT"
-    req = urllib.request.Request(
-        url,
-        headers={"Accept": "application/dns-json"},
-        method="GET",
+_DNS_TIMEOUT = 3   # seconds per request
+_DNS_BUDGET  = 8   # total seconds for all DNS checks combined
+
+
+def _dns_txt(domain: str) -> List[str]:
+    """Return TXT records via Cloudflare DoH. Returns [] on any error."""
+    url = (
+        "https://cloudflare-dns.com/dns-query?"
+        + urllib.parse.urlencode({"name": domain, "type": "TXT"})
     )
+    req = urllib.request.Request(url, headers={"Accept": "application/dns-json"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urllib.request.urlopen(req, timeout=_DNS_TIMEOUT) as resp:
             data = json.loads(resp.read().decode())
-        answers = data.get("Answer") or []
-        return [a.get("data", "").strip('"') for a in answers if a.get("type") == 16]
-    except Exception as e:
-        log.debug("DNS TXT lookup failed for %s: %s", domain, e)
+        return [
+            a.get("data", "").strip('"')
+            for a in (data.get("Answer") or [])
+            if a.get("type") == 16
+        ]
+    except Exception:
         return []
+
+
+def _check_spf(domain: str) -> Optional[bool]:
+    txts = _dns_txt(domain)
+    return any("v=spf1" in t.lower() for t in txts) if txts is not None else None
+
+
+def _check_dmarc(domain: str) -> Optional[bool]:
+    txts = _dns_txt(f"_dmarc.{domain}")
+    return any("v=dmarc1" in t.lower() for t in txts) if txts is not None else None
+
+
+def _check_dkim(domain: str) -> Optional[bool]:
+    for selector in ("k1", "k2", "klaviyo1"):
+        txts = _dns_txt(f"{selector}._domainkey.{domain}")
+        if any("v=dkim1" in t.lower() or "p=" in t.lower() for t in txts):
+            return True
+    return False
 
 
 def check_dns(domain: str) -> Dict[str, Optional[bool]]:
     """
-    Check SPF, DKIM (k1._domainkey), and DMARC for the given domain.
-    Returns None for each if the lookup fails (unknown, not False).
+    Run SPF / DKIM / DMARC checks in parallel with a hard total timeout.
+    Returns None for each check if unreachable — treated as unknown, not False.
     """
-    result: Dict[str, Optional[bool]] = {
-        "has_spf": None,
-        "has_dkim": None,
-        "has_dmarc": None,
-    }
+    blank: Dict[str, Optional[bool]] = {"has_spf": None, "has_dkim": None, "has_dmarc": None}
 
-    # Strip protocol/path — just the apex domain
-    domain = domain.lower().replace("https://", "").replace("http://", "").split("/")[0].lstrip("www.")
+    domain = (
+        domain.lower()
+        .replace("https://", "").replace("http://", "")
+        .split("/")[0].lstrip("www.")
+    )
     if not domain or "." not in domain:
-        return result
+        return blank
 
     try:
-        # SPF — TXT record on apex domain containing "v=spf1"
-        apex_txts = _dns_txt(domain)
-        result["has_spf"] = any("v=spf1" in t.lower() for t in apex_txts)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+            f_spf   = pool.submit(_check_spf,   domain)
+            f_dmarc = pool.submit(_check_dmarc, domain)
+            f_dkim  = pool.submit(_check_dkim,  domain)
 
-        # DMARC — TXT record on _dmarc.{domain}
-        dmarc_txts = _dns_txt(f"_dmarc.{domain}")
-        result["has_dmarc"] = any("v=dmarc1" in t.lower() for t in dmarc_txts)
+            def _get(f: concurrent.futures.Future) -> Optional[bool]:
+                try:
+                    return f.result(timeout=_DNS_BUDGET)
+                except Exception:
+                    return None
 
-        # DKIM — check common Klaviyo selectors (k1, k2, klaviyo1)
-        dkim_found = False
-        for selector in ("k1", "k2", "klaviyo1"):
-            records = _dns_txt(f"{selector}._domainkey.{domain}")
-            if any("v=dkim1" in t.lower() or "p=" in t.lower() for t in records):
-                dkim_found = True
-                break
-        result["has_dkim"] = dkim_found
+            result = {
+                "has_spf":   _get(f_spf),
+                "has_dmarc": _get(f_dmarc),
+                "has_dkim":  _get(f_dkim),
+            }
 
-        log.info("DNS checks for %s → SPF=%s DKIM=%s DMARC=%s",
+        log.info("DNS %s → SPF=%s DKIM=%s DMARC=%s",
                  domain, result["has_spf"], result["has_dkim"], result["has_dmarc"])
+        return result
     except Exception as e:
         log.warning("DNS check failed for %s: %s", domain, e)
-
-    return result
+        return blank
 
 
 # ── Account ────────────────────────────────────────────────────────────────

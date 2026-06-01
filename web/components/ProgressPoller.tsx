@@ -7,18 +7,18 @@ import type { AuditStatus } from "@/types/audit";
 
 const STEPS = [
   { min: 0,  max: 7,  label: "Connecting to Klaviyo…" },
-  { min: 8,  max: 14, label: "Validating API key & reading account info…" },
-  { min: 15, max: 21, label: "Pulling profile & list data…" },
-  { min: 22, max: 34, label: "Pulling campaigns & analysing segmentation…" },
-  { min: 35, max: 47, label: "Pulling campaign performance metrics…" },
-  { min: 48, max: 57, label: "Pulling flows & flow messages…" },
-  { min: 58, max: 64, label: "Pulling signup forms…" },
-  { min: 65, max: 71, label: "Checking deliverability signals (SPF / DKIM / DMARC)…" },
-  { min: 72, max: 77, label: "Normalising account data…" },
+  { min: 8,  max: 11, label: "Validating API key & reading account info…" },
+  { min: 12, max: 14, label: "Starting data pull…" },
+  { min: 15, max: 24, label: "Pulling lists & segments…" },
+  { min: 25, max: 39, label: "Pulling campaigns & analysing segmentation…" },
+  { min: 40, max: 54, label: "Pulling campaign performance metrics…" },
+  { min: 55, max: 64, label: "Pulling flows & flow messages…" },
+  { min: 65, max: 71, label: "Pulling profile count…" },
+  { min: 72, max: 75, label: "Pulling signup forms…" },
+  { min: 76, max: 77, label: "Normalising account data…" },
   { min: 78, max: 83, label: "Scoring 10 audit categories…" },
   { min: 84, max: 90, label: "Running 125+ decision rules…" },
-  { min: 91, max: 95, label: "Evaluating findings & building recommendations…" },
-  { min: 96, max: 99, label: "Calculating revenue opportunity & finalising report…" },
+  { min: 91, max: 99, label: "Building recommendations & finalising report…" },
 ];
 
 function stepIndex(pct: number): number {

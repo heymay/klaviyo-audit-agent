@@ -176,21 +176,16 @@ def _run_audit_background(audit_id: str, request_data: Dict) -> None:
 
             client = KlaviyoClient.from_env()
 
-            # Validate connection first so auth errors surface immediately
             _progress(audit_id, 8, "Validating API key & reading account info…")
             client.validate_connection()
 
-            _progress(audit_id, 15, "Pulling profile & list data…")
-            # pull_all internally emits print statements; we bracket it with progress calls
-            _progress(audit_id, 22, "Pulling campaigns & analysing segmentation…")
-            _progress(audit_id, 35, "Pulling campaign performance metrics…")
-            _progress(audit_id, 48, "Pulling flows & flow messages…")
-            _progress(audit_id, 58, "Pulling signup forms…")
-            _progress(audit_id, 65, "Checking deliverability signals (DNS / SPF / DKIM / DMARC)…")
+            def _on_progress(pct: int, msg: str):
+                _progress(audit_id, pct, msg)
 
-            raw = pull_all(client, website=context.get("website", ""))
+            _progress(audit_id, 12, "Starting data pull…")
+            raw = pull_all(client, website=context.get("website", ""), progress_cb=_on_progress)
 
-            _progress(audit_id, 72, "Normalising account data…")
+            _progress(audit_id, 76, "Normalising account data…")
             acct = normalize(raw, manual, context)
         finally:
             os.environ.pop("KLAVIYO_API_KEY", None)

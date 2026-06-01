@@ -444,7 +444,7 @@ def _pull_forms(client: KlaviyoClient) -> List[Dict]:
 
 # ── Main orchestrator ──────────────────────────────────────────────────────
 
-def pull_all(client: KlaviyoClient, website: str = "") -> Dict[str, Any]:
+def pull_all(client: KlaviyoClient, website: str = "", progress_cb=None) -> Dict[str, Any]:
     """
     Pull all available data from the Klaviyo API.
     Fields marked with _unknown=True were not retrievable and should not
@@ -453,12 +453,17 @@ def pull_all(client: KlaviyoClient, website: str = "") -> Dict[str, Any]:
     print("  [1/7] Validating connection and pulling account info...")
     account_info = _pull_account(client)
 
-    print("  [2/7] Pulling lists and segments...")
+    def _p(pct: int, msg: str):
+        print(f"  [{pct}%] {msg}")
+        if progress_cb:
+            progress_cb(pct, msg)
+
+    _p(15, "Pulling lists and segments…")
     lists_raw = _safe_pull("lists", lambda: _pull_lists(client), fallback=[])
     segments_raw = _safe_pull("segments", lambda: _pull_segments(client), fallback=[])
     segment_ids: Set[str] = {s["id"] for s in (segments_raw or [])}
 
-    print("  [3/7] Pulling campaigns and analysing segmentation...")
+    _p(25, "Pulling campaigns & analysing segmentation…")
     campaign_result = _safe_pull(
         "campaigns",
         lambda: _pull_campaigns(client, segment_ids),
@@ -468,23 +473,21 @@ def pull_all(client: KlaviyoClient, website: str = "") -> Dict[str, Any]:
     campaigns_raw: List[Dict] = campaign_result["campaigns"]
     pct_segmented: Optional[float] = campaign_result["pct_to_engaged_segments"]
 
-    print("  [4/7] Pulling campaign performance metrics...")
+    _p(40, "Pulling campaign performance metrics…")
     campaign_metrics = _safe_pull(
         "campaign-metrics",
         lambda: _pull_campaign_metrics(client),
         fallback={},
     ) or {}
 
-    print("  [5/7] Pulling flows and flow messages...")
+    _p(55, "Pulling flows & flow messages…")
     flows_raw = _safe_pull("flows", lambda: _pull_flows(client), fallback=[])
 
-    print("  [6/7] Pulling profile count...")
+    _p(65, "Pulling profile count…")
     total_profiles = _safe_pull("profiles", lambda: _pull_total_profile_count(client), fallback=0) or 0
 
-    print("  [7/7] Pulling forms...")
+    _p(72, "Pulling signup forms…")
     forms_raw = _safe_pull("forms", lambda: _pull_forms(client), fallback=[])
-    # DNS checks removed — outbound DNS-over-HTTPS blocked on Railway.
-    # None → normalizer defaults to True (benefit of doubt), no false findings fire.
     dns: Dict[str, Optional[bool]] = {"has_spf": None, "has_dkim": None, "has_dmarc": None}
 
     # Derive campaign channel counts

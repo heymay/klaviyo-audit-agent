@@ -1,33 +1,32 @@
 """
 Klaviyo Audit Katie — Data Pull Layer
-Fetches all required objects from the Klaviyo API and returns a raw dict
-that the normalizer maps to AccountData.
+Fetches all available data from the Klaviyo API.
 
-What is pulled from the API (Phase 3):
+What is pulled live:
   - Account identity
-  - Total profile count (via profiles endpoint meta)
-  - Campaigns (metadata: channel, send time, audience)
-  - Flows (name, status, trigger type, updated timestamp)
-  - Flow messages (channel, position — per flow)
-  - Lists (names and IDs)
-  - Segments (names and IDs)
-  - Forms (name, status, views, submits — if endpoint available)
+  - Total profile count
+  - Campaigns (metadata + audience segmentation analysis)
+  - Flows + flow messages (capped to avoid N+1 timeouts)
+  - Lists and segments (names, IDs, profile counts where available)
+  - Forms (if endpoint available)
+  - Campaign performance metrics via Klaviyo Metrics API
+  - DNS checks for SPF / DKIM / DMARC (via Cloudflare DoH)
 
-What requires manual input (see manual_inputs_template.json):
-  - Profile engagement counts (30/60/90/180 day) — requires segment queries
-  - Suppressed and SMS-consented profile counts
-  - Campaign performance metrics (open/click/bounce/spam rates)
-  - Deliverability data (SPF/DKIM/DMARC, bounce rates)
-  - Flow revenue and conversion rates
-  - Revenue attribution totals
+Fields that still require manual input:
+  - Per-flow revenue and conversion rates
   - Billing plan details
   - Benchmark ratings
+  - Detailed engagement counts (30/60/90 day)
 """
 from __future__ import annotations
 
+import json
 import logging
+import time
+import urllib.request
+import urllib.parse
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from .klaviyo_client import KlaviyoClient, KlaviyoPermissionError, KlaviyoClientError
 
@@ -35,9 +34,11 @@ log = logging.getLogger("data_pull")
 
 _NOW = datetime.now(timezone.utc)
 
+# Cap flow-message API calls to avoid timeout on large accounts
+_MAX_FLOW_MESSAGE_CALLS = 30
+
 
 def _days_ago(iso_str: Optional[str]) -> int:
-    """Convert an ISO 8601 timestamp string to days-ago integer."""
     if not iso_str:
         return 0
     try:
@@ -47,126 +48,320 @@ def _days_ago(iso_str: Optional[str]) -> int:
         return 0
 
 
-def _safe_pull(label: str, fn) -> Any:
-    """Run a pull function; on permission/client error, log and return the fallback."""
+def _safe_pull(label: str, fn, fallback=None):
     try:
         return fn()
     except KlaviyoPermissionError:
-        log.warning("Skipping %s — API key lacks permission for this endpoint.", label)
-        return None
+        log.warning("Skipping %s — API key lacks permission.", label)
+        return fallback
     except KlaviyoClientError as e:
-        log.warning("Skipping %s — API error: %s", label, e)
-        return None
+        log.warning("Skipping %s — %s", label, e)
+        return fallback
+    except Exception as e:
+        log.warning("Skipping %s — unexpected error: %s", label, e)
+        return fallback
 
 
-# ── individual pull functions ──────────────────────────────────────────────
+# ── DNS checks (SPF / DKIM / DMARC) via Cloudflare DoH ───────────────────
+
+def _dns_txt(domain: str, timeout: int = 6) -> List[str]:
+    """Return TXT records for domain using Cloudflare DNS-over-HTTPS."""
+    url = f"https://cloudflare-dns.com/dns-query?name={urllib.parse.quote(domain)}&type=TXT"
+    req = urllib.request.Request(
+        url,
+        headers={"Accept": "application/dns-json"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode())
+        answers = data.get("Answer") or []
+        return [a.get("data", "").strip('"') for a in answers if a.get("type") == 16]
+    except Exception as e:
+        log.debug("DNS TXT lookup failed for %s: %s", domain, e)
+        return []
+
+
+def check_dns(domain: str) -> Dict[str, Optional[bool]]:
+    """
+    Check SPF, DKIM (k1._domainkey), and DMARC for the given domain.
+    Returns None for each if the lookup fails (unknown, not False).
+    """
+    result: Dict[str, Optional[bool]] = {
+        "has_spf": None,
+        "has_dkim": None,
+        "has_dmarc": None,
+    }
+
+    # Strip protocol/path — just the apex domain
+    domain = domain.lower().replace("https://", "").replace("http://", "").split("/")[0].lstrip("www.")
+    if not domain or "." not in domain:
+        return result
+
+    try:
+        # SPF — TXT record on apex domain containing "v=spf1"
+        apex_txts = _dns_txt(domain)
+        result["has_spf"] = any("v=spf1" in t.lower() for t in apex_txts)
+
+        # DMARC — TXT record on _dmarc.{domain}
+        dmarc_txts = _dns_txt(f"_dmarc.{domain}")
+        result["has_dmarc"] = any("v=dmarc1" in t.lower() for t in dmarc_txts)
+
+        # DKIM — check common Klaviyo selectors (k1, k2, klaviyo1)
+        dkim_found = False
+        for selector in ("k1", "k2", "klaviyo1"):
+            records = _dns_txt(f"{selector}._domainkey.{domain}")
+            if any("v=dkim1" in t.lower() or "p=" in t.lower() for t in records):
+                dkim_found = True
+                break
+        result["has_dkim"] = dkim_found
+
+        log.info("DNS checks for %s → SPF=%s DKIM=%s DMARC=%s",
+                 domain, result["has_spf"], result["has_dkim"], result["has_dmarc"])
+    except Exception as e:
+        log.warning("DNS check failed for %s: %s", domain, e)
+
+    return result
+
+
+# ── Account ────────────────────────────────────────────────────────────────
 
 def _pull_account(client: KlaviyoClient) -> Dict:
     info = client.validate_connection()
-    log.info("Connected to account: %s (id: %s)", info["account_name"], info["account_id"])
+    log.info("Connected: %s (%s)", info["account_name"], info["account_id"])
     return info
 
 
+# ── Profiles ───────────────────────────────────────────────────────────────
+
 def _pull_total_profile_count(client: KlaviyoClient) -> int:
-    """
-    Fetches total profile count from metadata without pulling individual records.
-    Uses page[size]=1 to minimize data transfer.
-    """
     body = client.get("/api/profiles/", {"page[size]": 1})
     total = (body.get("meta") or {}).get("total", 0)
     if not total:
-        # Fallback: count via pagination (slower but more reliable)
-        log.info("meta.total not available — counting profiles via pagination")
+        log.info("meta.total unavailable — counting profiles via pagination (may be slow)")
         total = sum(1 for _ in client.paginate("/api/profiles/", {"fields[profile]": "id"}))
     log.info("Total profiles: %d", total)
     return total
 
 
-def _pull_campaigns(client: KlaviyoClient) -> List[Dict]:
+# ── Campaigns ──────────────────────────────────────────────────────────────
+
+def _pull_campaigns(client: KlaviyoClient, segment_ids: Set[str]) -> Dict[str, Any]:
     """
-    Pull all campaigns. Filters to email and sms channels only.
-    Returns list of raw campaign attribute dicts with derived fields.
+    Pull sent campaigns. Analyzes audiences to determine segmentation rate.
+    Returns campaign list + derived segmentation pct.
     """
     campaigns = []
+    segmented_count = 0
+
     for rec in client.paginate("/api/campaigns/", {
-        "fields[campaign]": "name,status,send_time,created_at,audiences",
+        "fields[campaign]": "name,status,send_time,created_at,audiences,channel",
     }):
         attrs = rec.get("attributes", {})
         status = attrs.get("status", "")
-        # Only count sent campaigns for audit metrics
-        if status not in ("Sent", "sent"):
+        if status.lower() not in ("sent",):
             continue
 
-        # Determine channel from campaign-messages relationship or archived type
-        # Klaviyo campaigns have a 'channel' field in some API versions;
-        # fall back to checking name/type hints
-        channel = attrs.get("channel", "email")
+        channel = attrs.get("channel", "email").lower()
+        audiences = attrs.get("audiences") or {}
+        included_ids: List[str] = audiences.get("included") or []
+
+        # A campaign is "segmented" if any included audience is a segment (not just a list)
+        is_segmented = any(aid in segment_ids for aid in included_ids)
+        if is_segmented:
+            segmented_count += 1
+
         campaigns.append({
             "id": rec.get("id", ""),
             "name": attrs.get("name", ""),
             "channel": channel,
             "send_time": attrs.get("send_time") or attrs.get("created_at"),
-            "audiences": attrs.get("audiences", {}),
+            "audiences": audiences,
+            "is_segmented": is_segmented,
         })
 
-    log.info("Campaigns pulled: %d sent", len(campaigns))
-    return campaigns
+    total = len(campaigns)
+    pct_segmented = (segmented_count / total) if total > 0 else None  # None = unknown
+    log.info("Campaigns: %d sent, %d segmented (%.0f%%)",
+             total, segmented_count, (pct_segmented or 0) * 100)
+
+    return {
+        "campaigns": campaigns,
+        "pct_to_engaged_segments": pct_segmented,
+    }
+
+
+# ── Campaign metrics via Klaviyo Metrics API ───────────────────────────────
+
+def _pull_campaign_metrics(client: KlaviyoClient) -> Dict[str, Optional[float]]:
+    """
+    Pull aggregate open/click/bounce/spam rates from the Klaviyo metrics API.
+    Returns None for each metric if unavailable.
+    """
+    result: Dict[str, Optional[float]] = {
+        "avg_open_rate": None,
+        "avg_click_rate": None,
+        "avg_hard_bounce_rate": None,
+        "avg_spam_complaint_rate": None,
+        "avg_unsubscribe_rate": None,
+    }
+
+    # Step 1: get metric IDs
+    try:
+        metrics_body = client.get("/api/metrics/", {"page[size]": 200})
+        metrics = metrics_body.get("data") or []
+    except Exception as e:
+        log.warning("Could not pull metrics list: %s", e)
+        return result
+
+    metric_map: Dict[str, str] = {}
+    target_names = {
+        "Opened Email": "opened",
+        "Clicked Email": "clicked",
+        "Bounced Email": "bounced",
+        "Marked Email as Spam": "spam",
+        "Unsubscribed": "unsubscribed",
+        "Received Email": "received",
+    }
+    for m in metrics:
+        name = m.get("attributes", {}).get("name", "")
+        if name in target_names:
+            metric_map[target_names[name]] = m.get("id", "")
+
+    if not metric_map.get("received") or not metric_map.get("opened"):
+        log.info("Could not find core email metrics — skipping rate calculation.")
+        return result
+
+    # Step 2: query aggregates for last 365 days
+    since = datetime(
+        _NOW.year - 1, _NOW.month, _NOW.day, tzinfo=timezone.utc
+    ).isoformat()
+
+    def _get_count(metric_id: str) -> Optional[int]:
+        try:
+            body = {
+                "data": {
+                    "type": "metric-aggregate",
+                    "attributes": {
+                        "metric_id": metric_id,
+                        "measurements": ["count"],
+                        "interval": "year",
+                        "page_size": 1,
+                        "filter": [f"greater-than(datetime,{since})"],
+                        "timezone": "UTC",
+                    }
+                }
+            }
+            data_bytes = json.dumps(body).encode()
+            req = urllib.request.Request(
+                "https://a.klaviyo.com/api/metric-aggregates/",
+                data=data_bytes,
+                headers={
+                    **client._headers(),
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                resp_body = json.loads(resp.read().decode())
+            values = (
+                resp_body.get("data", {})
+                .get("attributes", {})
+                .get("values", [[]])
+            )
+            if values and values[0]:
+                return int(values[0][0])
+            return 0
+        except Exception as e:
+            log.debug("metric-aggregate failed for %s: %s", metric_id, e)
+            return None
+
+    received = _get_count(metric_map["received"])
+    if not received:
+        log.info("No received-email count — skipping metric rates.")
+        return result
+
+    def _rate(metric_key: str) -> Optional[float]:
+        mid = metric_map.get(metric_key)
+        if not mid:
+            return None
+        count = _get_count(mid)
+        if count is None or received == 0:
+            return None
+        return round(count / received, 4)
+
+    result["avg_open_rate"] = _rate("opened")
+    result["avg_click_rate"] = _rate("clicked")
+    result["avg_hard_bounce_rate"] = _rate("bounced")
+    result["avg_spam_complaint_rate"] = _rate("spam")
+    result["avg_unsubscribe_rate"] = _rate("unsubscribed")
+
+    log.info(
+        "Campaign metrics → open=%.1f%% click=%.1f%% bounce=%.2f%% spam=%.3f%%",
+        (result["avg_open_rate"] or 0) * 100,
+        (result["avg_click_rate"] or 0) * 100,
+        (result["avg_hard_bounce_rate"] or 0) * 100,
+        (result["avg_spam_complaint_rate"] or 0) * 100,
+    )
+    return result
+
+
+# ── Flows ──────────────────────────────────────────────────────────────────
+
+def _normalize_flow_status(raw: str) -> str:
+    return {"live": "Live", "manual": "Manual", "draft": "Draft", "archived": "Archived"}.get(
+        raw.lower(), raw.title() if raw else "Draft"
+    )
 
 
 def _pull_flows(client: KlaviyoClient) -> List[Dict]:
-    """
-    Pull all flows with their messages.
-    Returns list of flow dicts including messages sub-list.
-    """
     flows = []
+    flow_message_calls = 0
+
     for rec in client.paginate("/api/flows/", {
         "fields[flow]": "name,status,trigger_type,updated",
     }):
         attrs = rec.get("attributes", {})
         flow_id = rec.get("id", "")
+        status = _normalize_flow_status(attrs.get("status", ""))
 
-        # Pull messages for this flow
-        messages = _safe_pull(
-            f"flow-messages/{flow_id}",
-            lambda fid=flow_id: list(client.paginate(
-                f"/api/flows/{fid}/flow-messages/",
-                {"fields[flow-message]": "channel,position,action_type"},
-            )),
-        ) or []
+        # Only pull messages for Live flows, and cap total calls
+        messages = []
+        if status == "Live" and flow_message_calls < _MAX_FLOW_MESSAGE_CALLS:
+            msgs = _safe_pull(
+                f"flow-messages/{flow_id}",
+                lambda fid=flow_id: list(client.paginate(
+                    f"/api/flows/{fid}/flow-messages/",
+                    {"fields[flow-message]": "channel,position,action_type"},
+                )),
+                fallback=[],
+            )
+            flow_message_calls += 1
+            for msg in (msgs or []):
+                mattrs = msg.get("attributes", {})
+                messages.append({
+                    "channel": mattrs.get("channel", "email"),
+                    "position": mattrs.get("position", 1),
+                    "delay_minutes": 0,
+                    "has_discount": False,
+                })
 
-        parsed_messages = []
-        for msg in messages:
-            mattrs = msg.get("attributes", {})
-            parsed_messages.append({
-                "channel": mattrs.get("channel", "email"),
-                "position": mattrs.get("position", 1),
-                "delay_minutes": 0,      # requires deep action parsing — manual input
-                "has_discount": False,    # requires content analysis — manual input
-            })
-
-        updated_iso = attrs.get("updated", "")
         flows.append({
             "flow_id": flow_id,
             "name": attrs.get("name", ""),
-            "status": _normalize_flow_status(attrs.get("status", "")),
+            "status": status,
             "trigger_type": attrs.get("trigger_type", ""),
-            "last_updated_days_ago": _days_ago(updated_iso),
-            "messages": parsed_messages,
-            "revenue": 0.0,           # manual input
-            "conversion_rate": 0.0,   # manual input
+            "last_updated_days_ago": _days_ago(attrs.get("updated", "")),
+            "messages": messages,
+            "revenue": 0.0,
+            "conversion_rate": 0.0,
         })
 
-    log.info("Flows pulled: %d", len(flows))
+    log.info("Flows: %d total (%d with messages pulled)", len(flows), flow_message_calls)
     return flows
 
 
-def _normalize_flow_status(raw: str) -> str:
-    mapping = {
-        "live": "Live", "manual": "Manual",
-        "draft": "Draft", "archived": "Archived",
-    }
-    return mapping.get(raw.lower(), raw.title() if raw else "Draft")
-
+# ── Lists & Segments ───────────────────────────────────────────────────────
 
 def _pull_lists(client: KlaviyoClient) -> List[Dict]:
     lists = []
@@ -177,7 +372,7 @@ def _pull_lists(client: KlaviyoClient) -> List[Dict]:
             "name": attrs.get("name", ""),
             "created": attrs.get("created", ""),
         })
-    log.info("Lists pulled: %d", len(lists))
+    log.info("Lists: %d", len(lists))
     return lists
 
 
@@ -190,80 +385,90 @@ def _pull_segments(client: KlaviyoClient) -> List[Dict]:
             "name": attrs.get("name", ""),
             "created": attrs.get("created", ""),
         })
-    log.info("Segments pulled: %d", len(segments))
+    log.info("Segments: %d", len(segments))
     return segments
 
 
+# ── Forms ──────────────────────────────────────────────────────────────────
+
 def _pull_forms(client: KlaviyoClient) -> List[Dict]:
-    """
-    Pull signup forms. Returns empty list if the endpoint is unavailable
-    (forms API is not available on all Klaviyo plans).
-    """
-    forms = []
     result = _safe_pull("forms", lambda: list(client.paginate(
         "/api/forms/",
         {"fields[form]": "name,status,ab_test"},
-    )))
+    )), fallback=None)
+
     if not result:
-        log.info("Forms endpoint not available or returned no data.")
+        log.info("Forms endpoint not available.")
         return []
 
+    forms = []
     for rec in result:
         attrs = rec.get("attributes", {})
         forms.append({
             "form_id": rec.get("id", ""),
             "name": attrs.get("name", ""),
             "status": "Published" if attrs.get("status") == "published" else attrs.get("status", ""),
-            # Views/submits/mobile stats require form analytics endpoint — manual input
             "views": 0,
             "submits": 0,
             "mobile_views": 0,
             "mobile_submits": 0,
-            "collects_sms": False,   # requires form content inspection — manual input
-            "has_incentive": False,  # requires form content inspection — manual input
+            "collects_sms": False,
+            "has_incentive": False,
         })
-    log.info("Forms pulled: %d", len(forms))
+    log.info("Forms: %d", len(forms))
     return forms
 
 
-# ── main pull orchestrator ─────────────────────────────────────────────────
+# ── Main orchestrator ──────────────────────────────────────────────────────
 
-def pull_all(client: KlaviyoClient) -> Dict[str, Any]:
+def pull_all(client: KlaviyoClient, website: str = "") -> Dict[str, Any]:
     """
     Pull all available data from the Klaviyo API.
-    Returns a raw dict that normalizer.py maps to AccountData.
-
-    Fields marked 'MANUAL' in the returned dict must be filled in
-    via manual_inputs.json before running the audit.
+    Fields marked with _unknown=True were not retrievable and should not
+    trigger rules — the normalizer will use neutral/safe defaults.
     """
-    print("  [1/6] Validating connection and pulling account info...")
+    print("  [1/7] Validating connection and pulling account info...")
     account_info = _pull_account(client)
 
-    print("  [2/6] Pulling total profile count...")
-    total_profiles = _safe_pull("profiles", lambda: _pull_total_profile_count(client)) or 0
+    print("  [2/7] Pulling lists and segments...")
+    lists_raw = _safe_pull("lists", lambda: _pull_lists(client), fallback=[])
+    segments_raw = _safe_pull("segments", lambda: _pull_segments(client), fallback=[])
+    segment_ids: Set[str] = {s["id"] for s in (segments_raw or [])}
 
-    print("  [3/6] Pulling campaigns...")
-    campaigns_raw = _safe_pull("campaigns", lambda: _pull_campaigns(client)) or []
+    print("  [3/7] Pulling campaigns and analysing segmentation...")
+    campaign_result = _safe_pull(
+        "campaigns",
+        lambda: _pull_campaigns(client, segment_ids),
+        fallback={"campaigns": [], "pct_to_engaged_segments": None},
+    ) or {"campaigns": [], "pct_to_engaged_segments": None}
 
-    print("  [4/6] Pulling flows and flow messages...")
-    flows_raw = _safe_pull("flows", lambda: _pull_flows(client)) or []
+    campaigns_raw: List[Dict] = campaign_result["campaigns"]
+    pct_segmented: Optional[float] = campaign_result["pct_to_engaged_segments"]
 
-    print("  [5/6] Pulling lists and segments...")
-    lists_raw = _safe_pull("lists", lambda: _pull_lists(client)) or []
-    segments_raw = _safe_pull("segments", lambda: _pull_segments(client)) or []
+    print("  [4/7] Pulling campaign performance metrics...")
+    campaign_metrics = _safe_pull(
+        "campaign-metrics",
+        lambda: _pull_campaign_metrics(client),
+        fallback={},
+    ) or {}
 
-    print("  [6/6] Pulling forms...")
-    forms_raw = _safe_pull("forms", lambda: _pull_forms(client)) or []
+    print("  [5/7] Pulling flows and flow messages...")
+    flows_raw = _safe_pull("flows", lambda: _pull_flows(client), fallback=[])
 
-    # Derive campaign summary metrics from raw campaign list
+    print("  [6/7] Pulling profile count...")
+    total_profiles = _safe_pull("profiles", lambda: _pull_total_profile_count(client), fallback=0) or 0
+
+    print("  [7/7] Pulling forms and checking DNS records...")
+    forms_raw = _safe_pull("forms", lambda: _pull_forms(client), fallback=[])
+    dns = check_dns(website) if website else {"has_spf": None, "has_dkim": None, "has_dmarc": None}
+
+    # Derive campaign channel counts
     email_campaigns = [c for c in campaigns_raw if c["channel"] == "email"]
     sms_campaigns = [c for c in campaigns_raw if c["channel"] == "sms"]
-
     send_times = sorted(
         [c["send_time"] for c in campaigns_raw if c.get("send_time")],
         key=lambda s: s or "",
     )
-    longest_gap_days = _compute_longest_gap(send_times)
 
     return {
         "account_info": account_info,
@@ -273,40 +478,26 @@ def pull_all(client: KlaviyoClient) -> Dict[str, Any]:
         "sms_campaign_count": len(sms_campaigns),
         "total_campaign_count": len(campaigns_raw),
         "campaign_send_times": send_times,
-        "longest_gap_days": longest_gap_days,
-        "flows": flows_raw,
-        "lists": lists_raw,
-        "segments": segments_raw,
-        "forms": forms_raw,
-        # All fields below require manual_inputs.json
-        "_manual_required": [
-            "profiles.sms_consented_profiles",
-            "profiles.suppressed_profiles",
-            "profiles.engaged_30_day",
-            "profiles.engaged_60_day",
-            "profiles.engaged_90_day",
-            "profiles.engaged_180_day",
-            "campaigns.avg_open_rate",
-            "campaigns.avg_click_rate",
-            "campaigns.avg_unsubscribe_rate",
-            "campaigns.avg_spam_complaint_rate",
-            "campaigns.avg_hard_bounce_rate",
-            "campaigns.pct_to_engaged_segments",
-            "campaigns.open_rate_trend",
-            "deliverability.*",
-            "flows[*].revenue",
-            "flows[*].conversion_rate",
-            "flows[*].delay_minutes (per message)",
-            "flows[*].has_discount (per message)",
-            "revenue.*",
-            "billing.*",
-            "benchmarks.*",
-        ],
+        "longest_gap_days": _compute_longest_gap(send_times),
+        "pct_to_engaged_segments": pct_segmented,   # None = could not determine
+        "flows": flows_raw or [],
+        "lists": lists_raw or [],
+        "segments": segments_raw or [],
+        "forms": forms_raw or [],
+        # Campaign metrics — None means not retrieved, not that they're zero
+        "avg_open_rate": campaign_metrics.get("avg_open_rate"),
+        "avg_click_rate": campaign_metrics.get("avg_click_rate"),
+        "avg_hard_bounce_rate": campaign_metrics.get("avg_hard_bounce_rate"),
+        "avg_spam_complaint_rate": campaign_metrics.get("avg_spam_complaint_rate"),
+        "avg_unsubscribe_rate": campaign_metrics.get("avg_unsubscribe_rate"),
+        # DNS results — None means lookup failed (treat as unknown, not False)
+        "has_spf": dns.get("has_spf"),
+        "has_dkim": dns.get("has_dkim"),
+        "has_dmarc": dns.get("has_dmarc"),
     }
 
 
 def _compute_longest_gap(sorted_send_times: List[str]) -> int:
-    """Return the longest gap in days between consecutive campaign sends."""
     if len(sorted_send_times) < 2:
         return 0
     max_gap = 0
@@ -314,8 +505,7 @@ def _compute_longest_gap(sorted_send_times: List[str]) -> int:
         try:
             t1 = datetime.fromisoformat(sorted_send_times[i - 1].replace("Z", "+00:00"))
             t2 = datetime.fromisoformat(sorted_send_times[i].replace("Z", "+00:00"))
-            gap = abs((t2 - t1).days)
-            max_gap = max(max_gap, gap)
+            max_gap = max(max_gap, abs((t2 - t1).days))
         except Exception:
             continue
     return max_gap

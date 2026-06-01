@@ -119,6 +119,9 @@ class AuditRequest(BaseModel):
     monthly_revenue_range: str = ""
     audit_period_days: int = 365
 
+    # From the intake form
+    sms_enabled: bool = False
+
     # Klaviyo connection — key is write-once, never echoed back
     klaviyo_api_key: str = Field(..., min_length=10)
 
@@ -145,6 +148,11 @@ def _run_audit_background(audit_id: str, request_data: Dict) -> None:
 
         api_key = request_data.pop("klaviyo_api_key")   # extract + remove from dict
         manual = request_data.get("manual_inputs", {})
+        # Seed manual with form-supplied context so normalizer can use it
+        if "account_context" not in manual:
+            manual["account_context"] = {}
+        if "sms_enabled" in request_data:
+            manual["account_context"]["sms_enabled"] = request_data["sms_enabled"]
         context = {
             "business_name": request_data["business_name"],
             "website": request_data["website"],
@@ -162,7 +170,7 @@ def _run_audit_background(audit_id: str, request_data: Dict) -> None:
             from src.normalizer import normalize
 
             client = KlaviyoClient.from_env()
-            raw = pull_all(client)
+            raw = pull_all(client, website=context.get("website", ""))
             acct = normalize(raw, manual, context)
         finally:
             # Clear key from environment immediately after use

@@ -31,7 +31,7 @@ def normalize(raw: Dict[str, Any], manual: Dict[str, Any], context: Dict[str, An
     campaigns = _build_campaigns(raw, manual)
     flows = _build_flows(raw, manual)
     forms = _build_forms(raw, manual)
-    deliverability = _build_deliverability(manual)
+    deliverability = _build_deliverability(raw, manual)
     revenue = _build_revenue(manual)
     billing = _build_billing(manual)
     segmentation = _build_segmentation(raw, manual)
@@ -81,19 +81,35 @@ def _build_profiles(raw: Dict, manual: Dict):
 def _build_campaigns(raw: Dict, manual: Dict):
     from .models import CampaignData
     m = manual.get("campaigns", {})
-    audit_days = 365  # default; updated by caller if needed
-    weeks = max(1, raw.get("total_campaign_count", 0) and _WEEKS_IN_YEAR)
+
+    # For rates: prefer live API data, then manual override.
+    # If neither is available, use None so rules skip rather than fire on 0.
+    def _rate(api_key: str, manual_key: str, fallback=None):
+        api_val = raw.get(api_key)
+        if api_val is not None:
+            return api_val
+        manual_val = m.get(manual_key)
+        if manual_val is not None:
+            return manual_val
+        return fallback
+
+    # pct_to_engaged_segments: use live analysis, else manual, else 0.5 (neutral)
+    pct_seg = raw.get("pct_to_engaged_segments")
+    if pct_seg is None:
+        pct_seg = m.get("pct_to_engaged_segments")
+    if pct_seg is None:
+        pct_seg = 0.5   # unknown → neutral (won't trigger CAMP-003 or CAMP-004)
 
     return CampaignData(
         total_sent=raw.get("total_campaign_count", 0),
         email_campaigns=raw.get("email_campaign_count", 0),
         sms_campaigns=raw.get("sms_campaign_count", 0),
-        avg_open_rate=m.get("avg_open_rate", 0.0),
-        avg_click_rate=m.get("avg_click_rate", 0.0),
-        avg_unsubscribe_rate=m.get("avg_unsubscribe_rate", 0.0),
-        avg_spam_complaint_rate=m.get("avg_spam_complaint_rate", 0.0),
-        avg_hard_bounce_rate=m.get("avg_hard_bounce_rate", 0.0),
-        pct_to_engaged_segments=m.get("pct_to_engaged_segments", 0.0),
+        avg_open_rate=_rate("avg_open_rate", "avg_open_rate", fallback=0.25),
+        avg_click_rate=_rate("avg_click_rate", "avg_click_rate", fallback=0.02),
+        avg_unsubscribe_rate=_rate("avg_unsubscribe_rate", "avg_unsubscribe_rate", fallback=0.001),
+        avg_spam_complaint_rate=_rate("avg_spam_complaint_rate", "avg_spam_complaint_rate", fallback=0.0),
+        avg_hard_bounce_rate=_rate("avg_hard_bounce_rate", "avg_hard_bounce_rate", fallback=0.0),
+        pct_to_engaged_segments=pct_seg,
         total_revenue=manual.get("revenue", {}).get("campaign_revenue", 0.0),
         weeks_in_period=_WEEKS_IN_YEAR,
         longest_gap_days=raw.get("longest_gap_days", 0),
@@ -206,17 +222,28 @@ def _find_form_override(name: str, overrides: List[Dict]) -> Dict:
 
 # ── deliverability ─────────────────────────────────────────────────────────
 
-def _build_deliverability(manual: Dict):
+def _build_deliverability(raw: Dict, manual: Dict):
     from .models import DeliverabilityData
     m = manual.get("deliverability", {})
+
+    # DNS values: prefer live check (raw), then manual override, then True (benefit of doubt)
+    def _dns(raw_key: str, manual_key: str) -> bool:
+        raw_val = raw.get(raw_key)
+        if raw_val is not None:
+            return bool(raw_val)
+        manual_val = m.get(manual_key)
+        if manual_val is not None:
+            return bool(manual_val)
+        return True  # unknown → assume configured; real issues will surface elsewhere
+
     return DeliverabilityData(
-        hard_bounce_rate=m.get("hard_bounce_rate", 0.0),
+        hard_bounce_rate=raw.get("avg_hard_bounce_rate") or m.get("hard_bounce_rate", 0.0),
         soft_bounce_rate=m.get("soft_bounce_rate", 0.0),
-        spam_complaint_rate=m.get("spam_complaint_rate", 0.0),
-        avg_unsubscribe_rate=m.get("avg_unsubscribe_rate", 0.0),
-        has_spf=m.get("has_spf", False),
-        has_dkim=m.get("has_dkim", False),
-        has_dmarc=m.get("has_dmarc", False),
+        spam_complaint_rate=raw.get("avg_spam_complaint_rate") or m.get("spam_complaint_rate", 0.0),
+        avg_unsubscribe_rate=raw.get("avg_unsubscribe_rate") or m.get("avg_unsubscribe_rate", 0.0),
+        has_spf=_dns("has_spf", "has_spf"),
+        has_dkim=_dns("has_dkim", "has_dkim"),
+        has_dmarc=_dns("has_dmarc", "has_dmarc"),
         has_branded_sending_domain=m.get("has_branded_sending_domain", False),
         open_rate_trend=m.get("open_rate_trend", "flat"),
     )

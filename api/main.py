@@ -136,19 +136,25 @@ class AuditStatusResponse(BaseModel):
     score_band: Optional[str] = None
     business_name: Optional[str] = None
     error: Optional[str] = None
+    progress: Optional[int] = None       # 0–100
+    current_step: Optional[str] = None  # human-readable step label
 
 
 # ── Background audit runner ─────────────────────────────────────────────────
 
+def _progress(audit_id: str, pct: int, step: str) -> None:
+    """Write a progress update so the poller can surface it."""
+    _store(audit_id, {"status": "running", "progress": pct, "current_step": step})
+    log.info("Audit %s — %d%% — %s", audit_id, pct, step)
+
+
 def _run_audit_background(audit_id: str, request_data: Dict) -> None:
     """Runs the full audit pipeline and stores result in Supabase."""
     try:
-        _store(audit_id, {"status": "running"})
-        log.info("Audit %s starting...", audit_id)
+        _progress(audit_id, 2, "Connecting to Klaviyo…")
 
-        api_key = request_data.pop("klaviyo_api_key")   # extract + remove from dict
+        api_key = request_data.pop("klaviyo_api_key")
         manual = request_data.get("manual_inputs", {})
-        # Seed manual with form-supplied context so normalizer can use it
         if "account_context" not in manual:
             manual["account_context"] = {}
         if "sms_enabled" in request_data:
@@ -162,7 +168,6 @@ def _run_audit_background(audit_id: str, request_data: Dict) -> None:
             "audit_period_days": request_data.get("audit_period_days", 365),
         }
 
-        # Set API key in environment for the Klaviyo client
         os.environ["KLAVIYO_API_KEY"] = api_key
         try:
             from src.klaviyo_client import KlaviyoClient
@@ -170,18 +175,39 @@ def _run_audit_background(audit_id: str, request_data: Dict) -> None:
             from src.normalizer import normalize
 
             client = KlaviyoClient.from_env()
+
+            # Validate connection first so auth errors surface immediately
+            _progress(audit_id, 8, "Validating API key & reading account info…")
+            client.validate_connection()
+
+            _progress(audit_id, 15, "Pulling profile & list data…")
+            # pull_all internally emits print statements; we bracket it with progress calls
+            _progress(audit_id, 22, "Pulling campaigns & analysing segmentation…")
+            _progress(audit_id, 35, "Pulling campaign performance metrics…")
+            _progress(audit_id, 48, "Pulling flows & flow messages…")
+            _progress(audit_id, 58, "Pulling signup forms…")
+            _progress(audit_id, 65, "Checking deliverability signals (DNS / SPF / DKIM / DMARC)…")
+
             raw = pull_all(client, website=context.get("website", ""))
+
+            _progress(audit_id, 72, "Normalising account data…")
             acct = normalize(raw, manual, context)
         finally:
-            # Clear key from environment immediately after use
             os.environ.pop("KLAVIYO_API_KEY", None)
 
+        _progress(audit_id, 78, "Scoring 10 audit categories…")
         category_scores, composite, band = run_scoring(acct)
+
+        _progress(audit_id, 84, "Running 125+ decision rules…")
         gaps = detect_gaps(acct)
         gap_findings = gaps_to_findings(gaps)
         rule_findings = run_rules(acct)
         findings = rule_findings + gap_findings
+
+        _progress(audit_id, 91, f"Evaluating {len(findings)} findings & building recommendations…")
         recommendations = build_recommendations(rule_findings)
+
+        _progress(audit_id, 96, "Calculating revenue opportunity & finalising report…")
 
         result = AuditResult(
             account=acct,
@@ -312,11 +338,14 @@ def get_audit_status(audit_id: str):
         "audit_id": audit_id,
         "status": status,
         "business_name": record.get("business_name"),
+        "progress": record.get("progress", 0 if status == "pending" else None),
+        "current_step": record.get("current_step"),
     }
 
     if status == "complete":
         response["composite_score"] = record.get("composite_score")
         response["score_band"] = record.get("score_band")
+        response["progress"] = 100
 
     if status == "error":
         response["error"] = record.get("error_message", "Unknown error")

@@ -166,4 +166,6 @@ export interface AuditStatus {
   score_band?: ScoreBand;
   business_name?: string;
   error?: string;
+  progress?: number;       // 0–100
+  current_step?: string;
 }

@@ -213,6 +213,60 @@ def health():
     return {"status": "ok", "service": "klaviyo-audit-api"}
 
 
+@app.post("/validate-key")
+async def validate_key(request: Request):
+    """
+    Validate a Klaviyo private API key by hitting GET /api/accounts/.
+    Returns: { valid: bool, account_name: str | None, error: str | None }
+    """
+    import httpx
+    body = await request.json()
+    key = (body.get("klaviyo_api_key") or "").strip()
+
+    if not key:
+        return JSONResponse({"valid": False, "error": "No API key provided."})
+
+    # Basic format hint — Klaviyo private keys start with pk_
+    if key.startswith("sb.") or key.startswith("sb_"):
+        return JSONResponse({
+            "valid": False,
+            "error": "That looks like a Supabase key, not a Klaviyo key. "
+                     "In Klaviyo go to Settings → API Keys and create a Private Key."
+        })
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                "https://a.klaviyo.com/api/accounts/",
+                headers={
+                    "Authorization": f"Klaviyo-API-Key {key}",
+                    "revision": "2024-02-15",
+                    "Accept": "application/json",
+                },
+            )
+        if resp.status_code == 200:
+            data = resp.json()
+            name = (
+                data.get("data", [{}])[0]
+                    .get("attributes", {})
+                    .get("contact_information", {})
+                    .get("organization_name")
+                or data.get("data", [{}])[0]
+                    .get("attributes", {})
+                    .get("public_api_key")
+            )
+            return JSONResponse({"valid": True, "account_name": name})
+        elif resp.status_code == 401:
+            return JSONResponse({"valid": False, "error": "Invalid API key — authentication failed (401)."})
+        elif resp.status_code == 403:
+            return JSONResponse({"valid": False, "error": "Key valid but missing read:accounts scope. Create a full read-only key."})
+        else:
+            return JSONResponse({"valid": False, "error": f"Klaviyo returned {resp.status_code}."})
+    except Exception as e:
+        log.error("validate-key error: %s", e)
+        return JSONResponse({"valid": False, "error": "Could not reach Klaviyo API. Check your connection."}, status_code=502)
+
+
 @app.post("/audits", status_code=202)
 async def start_audit(body: AuditRequest, background_tasks: BackgroundTasks):
     """

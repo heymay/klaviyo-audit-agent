@@ -26,6 +26,8 @@ export default function AuditForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showKey, setShowKey] = useState(false);
+  const [keyStatus, setKeyStatus] = useState<"idle" | "checking" | "valid" | "invalid">("idle");
+  const [keyMessage, setKeyMessage] = useState("");
 
   const [form, setForm] = useState({
     klaviyo_api_key: "",
@@ -38,6 +40,34 @@ export default function AuditForm() {
 
   function set(field: string, value: string | boolean) {
     setForm((prev) => ({ ...prev, [field]: value }));
+    if (field === "klaviyo_api_key") {
+      setKeyStatus("idle");
+      setKeyMessage("");
+    }
+  }
+
+  async function checkKey() {
+    if (!form.klaviyo_api_key.trim()) return;
+    setKeyStatus("checking");
+    setKeyMessage("");
+    try {
+      const res = await fetch("/api/audit/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ klaviyo_api_key: form.klaviyo_api_key }),
+      });
+      const data = await res.json();
+      if (data.valid) {
+        setKeyStatus("valid");
+        setKeyMessage(data.account_name ? `Connected: ${data.account_name}` : "Key is valid ✓");
+      } else {
+        setKeyStatus("invalid");
+        setKeyMessage(data.error ?? "Invalid API key.");
+      }
+    } catch {
+      setKeyStatus("invalid");
+      setKeyMessage("Could not validate key — check your connection.");
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -115,7 +145,11 @@ export default function AuditForm() {
               placeholder="pk_xxxxxxxxxxxxxxxxxxxxxxxx"
               value={form.klaviyo_api_key}
               onChange={(e) => set("klaviyo_api_key", e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 pr-20 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-np-navy"
+              className={`w-full border rounded-lg px-3 py-2 pr-20 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-np-navy ${
+                keyStatus === "valid" ? "border-green-400 bg-green-50" :
+                keyStatus === "invalid" ? "border-red-400 bg-red-50" :
+                "border-gray-300"
+              }`}
             />
             <button
               type="button"
@@ -125,10 +159,28 @@ export default function AuditForm() {
               {showKey ? "Hide" : "Show"}
             </button>
           </div>
-          <p className="mt-1 text-xs text-np-gray">
-            Settings → API Keys in Klaviyo. Create a read-only key — never
-            share your full-access key.
-          </p>
+
+          {/* Check key button + status */}
+          <div className="flex items-center gap-3 mt-1.5">
+            <button
+              type="button"
+              onClick={checkKey}
+              disabled={!form.klaviyo_api_key.trim() || keyStatus === "checking"}
+              className="text-xs px-3 py-1.5 rounded-lg border border-np-navy text-np-navy hover:bg-np-navy hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {keyStatus === "checking" ? "Checking…" : "Check Key"}
+            </button>
+            {keyMessage && (
+              <span className={`text-xs font-medium ${keyStatus === "valid" ? "text-green-600" : "text-red-600"}`}>
+                {keyStatus === "valid" ? "✓ " : "✗ "}{keyMessage}
+              </span>
+            )}
+            {!keyMessage && (
+              <span className="text-xs text-np-gray">
+                Settings → API Keys in Klaviyo. Create a read-only key.
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="grid sm:grid-cols-2 gap-5">

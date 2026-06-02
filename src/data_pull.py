@@ -471,6 +471,27 @@ def pull_all(client: KlaviyoClient, website: str = "", progress_cb=None) -> Dict
     segment_ids: Set[str] = {s["id"] for s in (segments_raw or [])}
 
     _p(25, "Pulling campaigns & analysing segmentation…")
+    # Diagnostic: log first raw page of campaigns
+    try:
+        _raw_camp = client.get("/api/campaigns/", {"page[size]": 3})
+        _camp_data = _raw_camp.get("data", [])
+        log.info("DIAG campaigns raw: total_records=%d first_statuses=%s",
+                 len(_camp_data),
+                 [r.get("attributes", {}).get("status") for r in _camp_data])
+    except Exception as _e:
+        log.error("DIAG campaigns raw fetch failed: %s", _e)
+
+    # Diagnostic: log first raw page of flows
+    try:
+        _raw_flow = client.get("/api/flows/", {"page[size]": 3})
+        _flow_data = _raw_flow.get("data", [])
+        log.info("DIAG flows raw: total_records=%d first_statuses=%s first_names=%s",
+                 len(_flow_data),
+                 [r.get("attributes", {}).get("status") for r in _flow_data],
+                 [r.get("attributes", {}).get("name") for r in _flow_data])
+    except Exception as _e:
+        log.error("DIAG flows raw fetch failed: %s", _e)
+
     campaign_result = _safe_pull(
         "campaigns",
         lambda: _pull_campaigns(client, segment_ids),

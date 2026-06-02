@@ -332,7 +332,8 @@ class AccountData:
     # Helpers
     @property
     def live_flows(self) -> List[FlowData]:
-        return [f for f in self.flows if f.is_live]
+        # Include Manual — Klaviyo uses "Manual" for metric-triggered active flows
+        return [f for f in self.flows if f.status in ("Live", "Manual")]
 
     def get_flow(self, flow_type: str) -> Optional[FlowData]:
         for f in self.live_flows:

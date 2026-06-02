@@ -309,13 +309,20 @@ def _build_segmentation(raw: Dict, manual: Dict):
             return bool(seg_manual[override_key])
         return any(_name_matches(n, patterns) for n in all_names)
 
+    # Prefer live API segmentation data, then manual, then neutral 0.5
+    pct = raw.get("pct_to_engaged_segments")
+    if pct is None:
+        pct = manual.get("campaigns", {}).get("pct_to_engaged_segments")
+    if pct is None:
+        pct = 0.5  # unknown → neutral, don't fire segmentation rules
+
     return SegmentationData(
         has_engaged_30_segment=detect(_ENGAGED_30_PATTERNS, "has_engaged_30_segment"),
         has_engaged_90_segment=detect(_ENGAGED_90_PATTERNS, "has_engaged_90_segment"),
         has_vip_segment=detect(_VIP_PATTERNS, "has_vip_segment"),
         has_purchaser_segment=detect(_PURCHASER_PATTERNS, "has_purchaser_segment"),
         has_sunset_segment=detect(_SUNSET_PATTERNS, "has_sunset_segment"),
-        pct_campaigns_to_engaged=manual.get("campaigns", {}).get("pct_to_engaged_segments", 0.0),
+        pct_campaigns_to_engaged=pct,
     )
 
 

@@ -296,6 +296,33 @@ async def validate_key(request: Request):
         return JSONResponse({"valid": False, "error": "Could not reach Klaviyo API. Check your connection."}, status_code=502)
 
 
+@app.post("/debug-pull")
+async def debug_pull(request: Request):
+    """Dev endpoint: runs a raw API pull and returns what Klaviyo actually returns."""
+    import httpx
+    body = await request.json()
+    key = (body.get("klaviyo_api_key") or "").strip()
+    if not key:
+        return JSONResponse({"error": "No key"}, status_code=400)
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        headers = {
+            "Authorization": f"Klaviyo-API-Key {key}",
+            "revision": "2024-02-15",
+            "Accept": "application/vnd.api+json",
+        }
+        results = {}
+        for label, url in [
+            ("campaigns", "https://a.klaviyo.com/api/campaigns/?page[size]=3"),
+            ("flows",     "https://a.klaviyo.com/api/flows/?page[size]=3"),
+            ("forms",     "https://a.klaviyo.com/api/forms/?page[size]=3"),
+            ("profiles",  "https://a.klaviyo.com/api/profiles/?page[size]=1"),
+        ]:
+            r = await client.get(url, headers=headers)
+            results[label] = {"status": r.status_code, "body": r.json() if r.status_code < 400 else r.text}
+    return JSONResponse(results)
+
+
 @app.post("/audits", status_code=202)
 async def start_audit(body: AuditRequest, background_tasks: BackgroundTasks):
     """

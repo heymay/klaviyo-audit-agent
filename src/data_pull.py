@@ -179,15 +179,22 @@ def _pull_campaigns(client: KlaviyoClient, segment_ids: Set[str]) -> Dict[str, A
     campaigns = []
     segmented_count = 0
 
-    for rec in client.paginate("/api/campaigns/", {
-        "fields[campaign]": "name,status,send_time,created_at,audiences,channel",
-    }):
+    # No fields filter — let Klaviyo return all fields; avoids 400 from invalid field names
+    for rec in client.paginate("/api/campaigns/"):
         attrs = rec.get("attributes", {})
         status = attrs.get("status", "")
-        if status.lower() not in ("sent",):
+        # Accept Sent and Delivered; skip Draft/Scheduled/Cancelled
+        if status.lower() not in ("sent", "delivered", "complete", "completed"):
             continue
 
-        channel = attrs.get("channel", "email").lower()
+        # channel may be top-level or inside send_strategy
+        channel = (
+            attrs.get("channel")
+            or (attrs.get("send_strategy") or {}).get("method", "")
+            or "email"
+        ).lower()
+        if channel not in ("email", "sms"):
+            channel = "email"
         audiences = attrs.get("audiences") or {}
         included_ids: List[str] = audiences.get("included") or []
 
@@ -200,7 +207,7 @@ def _pull_campaigns(client: KlaviyoClient, segment_ids: Set[str]) -> Dict[str, A
             "id": rec.get("id", ""),
             "name": attrs.get("name", ""),
             "channel": channel,
-            "send_time": attrs.get("send_time") or attrs.get("created_at"),
+            "send_time": attrs.get("scheduled_at") or attrs.get("send_time") or attrs.get("created_at"),
             "audiences": audiences,
             "is_segmented": is_segmented,
         })
@@ -343,16 +350,14 @@ def _pull_flows(client: KlaviyoClient) -> List[Dict]:
     flows = []
     flow_message_calls = 0
 
-    for rec in client.paginate("/api/flows/", {
-        "fields[flow]": "name,status,trigger_type,updated",
-    }):
+    for rec in client.paginate("/api/flows/"):
         attrs = rec.get("attributes", {})
         flow_id = rec.get("id", "")
         status = _normalize_flow_status(attrs.get("status", ""))
 
-        # Only pull messages for Live flows, and cap total calls
+        # Pull messages for Live and Manual flows (both are "active" in Klaviyo)
         messages = []
-        if status == "Live" and flow_message_calls < _MAX_FLOW_MESSAGE_CALLS:
+        if status in ("Live", "Manual") and flow_message_calls < _MAX_FLOW_MESSAGE_CALLS:
             msgs = _safe_pull(
                 f"flow-messages/{flow_id}",
                 lambda fid=flow_id: list(client.paginate(
@@ -417,10 +422,7 @@ def _pull_segments(client: KlaviyoClient) -> List[Dict]:
 # ── Forms ──────────────────────────────────────────────────────────────────
 
 def _pull_forms(client: KlaviyoClient) -> List[Dict]:
-    result = _safe_pull("forms", lambda: list(client.paginate(
-        "/api/forms/",
-        {"fields[form]": "name,status,ab_test"},
-    )), fallback=None)
+    result = _safe_pull("forms", lambda: list(client.paginate("/api/forms/")), fallback=None)
 
     if not result:
         log.info("Forms endpoint not available.")

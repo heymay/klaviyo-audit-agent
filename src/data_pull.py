@@ -109,6 +109,7 @@ def _check_dkim(domain: str) -> Optional[bool]:
 def check_dns(domain: str) -> Dict[str, Optional[bool]]:
     """
     Run SPF / DKIM / DMARC checks in parallel with a hard total timeout.
+    Uses shutdown(wait=False) so hung threads never block the audit.
     Returns None for each check if unreachable — treated as unknown, not False.
     """
     blank: Dict[str, Optional[bool]] = {"has_spf": None, "has_dkim": None, "has_dmarc": None}
@@ -121,30 +122,31 @@ def check_dns(domain: str) -> Dict[str, Optional[bool]]:
     if not domain or "." not in domain:
         return blank
 
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=3)
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
-            f_spf   = pool.submit(_check_spf,   domain)
-            f_dmarc = pool.submit(_check_dmarc, domain)
-            f_dkim  = pool.submit(_check_dkim,  domain)
+        f_spf   = pool.submit(_check_spf,   domain)
+        f_dmarc = pool.submit(_check_dmarc, domain)
+        f_dkim  = pool.submit(_check_dkim,  domain)
 
-            def _get(f: concurrent.futures.Future) -> Optional[bool]:
-                try:
-                    return f.result(timeout=_DNS_BUDGET)
-                except Exception:
-                    return None
+        def _get(f: concurrent.futures.Future) -> Optional[bool]:
+            try:
+                return f.result(timeout=_DNS_BUDGET)
+            except Exception:
+                return None
 
-            result = {
-                "has_spf":   _get(f_spf),
-                "has_dmarc": _get(f_dmarc),
-                "has_dkim":  _get(f_dkim),
-            }
-
+        result = {
+            "has_spf":   _get(f_spf),
+            "has_dmarc": _get(f_dmarc),
+            "has_dkim":  _get(f_dkim),
+        }
         log.info("DNS %s → SPF=%s DKIM=%s DMARC=%s",
                  domain, result["has_spf"], result["has_dkim"], result["has_dmarc"])
         return result
     except Exception as e:
         log.warning("DNS check failed for %s: %s", domain, e)
         return blank
+    finally:
+        pool.shutdown(wait=False)  # never block — let hung threads die in background
 
 
 # ── Account ────────────────────────────────────────────────────────────────
@@ -160,9 +162,9 @@ def _pull_account(client: KlaviyoClient) -> Dict:
 def _pull_total_profile_count(client: KlaviyoClient) -> int:
     body = client.get("/api/profiles/", {"page[size]": 1})
     total = (body.get("meta") or {}).get("total", 0)
+    # Never paginate — could be 100k+ API calls on large accounts
     if not total:
-        log.info("meta.total unavailable — counting profiles via pagination (may be slow)")
-        total = sum(1 for _ in client.paginate("/api/profiles/", {"fields[profile]": "id"}))
+        log.info("meta.total unavailable — returning 0 (profile count unknown)")
     log.info("Total profiles: %d", total)
     return total
 
@@ -488,7 +490,9 @@ def pull_all(client: KlaviyoClient, website: str = "", progress_cb=None) -> Dict
 
     _p(72, "Pulling signup forms…")
     forms_raw = _safe_pull("forms", lambda: _pull_forms(client), fallback=[])
-    dns: Dict[str, Optional[bool]] = {"has_spf": None, "has_dkim": None, "has_dmarc": None}
+
+    _p(74, "Checking SPF / DKIM / DMARC…")
+    dns = check_dns(website) if website else {"has_spf": None, "has_dkim": None, "has_dmarc": None}
 
     # Derive campaign channel counts
     email_campaigns = [c for c in campaigns_raw if c["channel"] == "email"]

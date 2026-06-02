@@ -25,7 +25,7 @@ import logging
 from typing import Any, Dict, Iterator, List, Optional
 
 API_BASE = "https://a.klaviyo.com"
-REVISION = "2026-04-15"
+REVISION = "2024-02-15"
 
 # Rate limit: Klaviyo burst = 75 req / 10 sec; steady-state ~10 req/sec
 _BACKOFF_INITIAL = 2.0   # seconds

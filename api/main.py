@@ -168,27 +168,31 @@ def _run_audit_background(audit_id: str, request_data: Dict) -> None:
             "audit_period_days": request_data.get("audit_period_days", 365),
         }
 
-        os.environ["KLAVIYO_API_KEY"] = api_key
-        try:
-            from src.klaviyo_client import KlaviyoClient
-            from src.data_pull import pull_all
-            from src.normalizer import normalize
+        from src.klaviyo_client import KlaviyoClient
+        from src.data_pull import pull_all
+        from src.normalizer import normalize
 
-            client = KlaviyoClient.from_env()
+        # Pass key directly — never rely on env var for thread safety
+        client = KlaviyoClient(api_key)
 
-            _progress(audit_id, 8, "Validating API key & reading account info…")
-            client.validate_connection()
+        _progress(audit_id, 8, "Validating API key & reading account info…")
+        account_info = client.validate_connection()
+        log.info("Connected to Klaviyo account: %s", account_info.get("account_name", "unknown"))
 
-            def _on_progress(pct: int, msg: str):
-                _progress(audit_id, pct, msg)
+        def _on_progress(pct: int, msg: str):
+            _progress(audit_id, pct, msg)
 
-            _progress(audit_id, 12, "Starting data pull…")
-            raw = pull_all(client, website=context.get("website", ""), progress_cb=_on_progress)
+        _progress(audit_id, 12, "Starting data pull…")
+        raw = pull_all(client, website=context.get("website", ""), progress_cb=_on_progress)
 
-            _progress(audit_id, 76, "Normalising account data…")
-            acct = normalize(raw, manual, context)
-        finally:
-            os.environ.pop("KLAVIYO_API_KEY", None)
+        log.info("Data pull complete — campaigns=%d flows=%d forms=%d profiles=%d",
+                 raw.get("total_campaign_count", 0),
+                 len(raw.get("flows", [])),
+                 len(raw.get("forms", [])),
+                 raw.get("total_profiles", 0))
+
+        _progress(audit_id, 76, "Normalising account data…")
+        acct = normalize(raw, manual, context)
 
         _progress(audit_id, 78, "Scoring 10 audit categories…")
         category_scores, composite, band = run_scoring(acct)

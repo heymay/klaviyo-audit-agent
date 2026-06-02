@@ -51,15 +51,17 @@ def _days_ago(iso_str: Optional[str]) -> int:
 
 def _safe_pull(label: str, fn, fallback=None):
     try:
-        return fn()
-    except KlaviyoPermissionError:
-        log.warning("Skipping %s — API key lacks permission.", label)
+        result = fn()
+        log.info("_safe_pull %s → OK (type=%s)", label, type(result).__name__)
+        return result
+    except KlaviyoPermissionError as e:
+        log.error("_safe_pull %s → PERMISSION DENIED: %s", label, e)
         return fallback
     except KlaviyoClientError as e:
-        log.warning("Skipping %s — %s", label, e)
+        log.error("_safe_pull %s → CLIENT ERROR: %s", label, e)
         return fallback
     except Exception as e:
-        log.warning("Skipping %s — unexpected error: %s", label, e)
+        log.error("_safe_pull %s → UNEXPECTED ERROR: %s", label, e, exc_info=True)
         return fallback
 
 
@@ -183,9 +185,10 @@ def _pull_campaigns(client: KlaviyoClient, segment_ids: Set[str]) -> Dict[str, A
     for rec in client.paginate("/api/campaigns/"):
         attrs = rec.get("attributes", {})
         status = attrs.get("status", "")
-        # Accept Sent and Delivered; skip Draft/Scheduled/Cancelled
-        if status.lower() not in ("sent", "delivered", "complete", "completed"):
+        # Skip only clearly unsent statuses; accept anything else
+        if status.lower() in ("draft", "scheduled", "cancelled", "canceled", ""):
             continue
+        log.debug("Campaign included: name=%s status=%s", attrs.get("name",""), status)
 
         # channel may be top-level or inside send_strategy
         channel = (

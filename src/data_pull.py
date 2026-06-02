@@ -163,12 +163,26 @@ def _pull_account(client: KlaviyoClient) -> Dict:
 
 def _pull_total_profile_count(client: KlaviyoClient) -> int:
     body = client.get("/api/profiles/", {"page[size]": 1})
-    total = (body.get("meta") or {}).get("total", 0)
-    # Never paginate — could be 100k+ API calls on large accounts
+    log.info("DIAG profiles meta: %s", body.get("meta"))
+    meta = body.get("meta") or {}
+    # Try multiple locations Klaviyo uses across API revisions
+    total = (
+        meta.get("total")
+        or meta.get("total_count")
+        or (meta.get("page_info") or {}).get("total_results")
+        or 0
+    )
     if not total:
-        log.info("meta.total unavailable — returning 0 (profile count unknown)")
-    log.info("Total profiles: %d", total)
-    return total
+        # Last resort: check if data array has records + links suggests more
+        data = body.get("data", [])
+        links = body.get("links", {})
+        if data and links.get("next"):
+            total = -1   # unknown but non-zero — use -1 as sentinel
+            log.info("profiles: count unknown but account has profiles (has next page)")
+        else:
+            log.info("profiles: meta.total unavailable, data=%d records", len(data))
+    log.info("Total profiles: %s", total)
+    return max(0, total) if isinstance(total, int) else 0
 
 
 # ── Campaigns ──────────────────────────────────────────────────────────────

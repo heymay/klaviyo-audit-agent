@@ -72,13 +72,13 @@ class FlowMessage:
 
 # Canonical names used for core flow type detection
 CORE_FLOW_PATTERNS = {
-    "welcome":           ["welcome", "new subscriber", "welcome series"],
-    "abandoned_cart":    ["abandoned cart", "cart abandonment", "checkout abandonment"],
-    "added_to_cart":     ["added to cart", "browse + cart"],
-    "browse_abandonment":["browse abandonment", "viewed product", "product viewed"],
-    "post_purchase":     ["post-purchase", "post purchase", "thank you", "after purchase", "order thank"],
-    "winback":           ["winback", "win back", "re-engagement", "reengagement", "we miss you"],
-    "vip":               ["vip", "loyalty", "top customer"],
+    "welcome":           ["welcome", "new subscriber", "welcome series", "onboard", "getting started"],
+    "abandoned_cart":    ["abandoned cart", "cart abandonment", "checkout abandonment", "abandon checkout", "recover cart"],
+    "added_to_cart":     ["added to cart", "browse + cart", "add to cart"],
+    "browse_abandonment":["browse abandonment", "viewed product", "product viewed", "browse abandon"],
+    "post_purchase":     ["post-purchase", "post purchase", "thank you", "after purchase", "order thank", "order confirm", "receipt"],
+    "winback":           ["winback", "win back", "re-engagement", "reengagement", "we miss you", "lapsed", "come back"],
+    "vip":               ["vip", "loyalty", "top customer", "signature club", "member"],
 }
 
 

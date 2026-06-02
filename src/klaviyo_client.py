@@ -75,6 +75,16 @@ class KlaviyoClient:
         """Returns a non-sensitive hint for log messages (first 6 chars only)."""
         return self._key[:6] + "..." if len(self._key) > 6 else "***"
 
+    @staticmethod
+    def _build_qs(params: Dict[str, Any]) -> str:
+        """Build query string keeping [ ] literal — urlencode encodes them as %5B%5D
+        which Klaviyo does not decode, causing 'page_size' invalid field errors."""
+        parts = []
+        for k, v in params.items():
+            if v is not None:
+                parts.append(f"{k}={urllib.parse.quote(str(v), safe='')}")
+        return "&".join(parts)
+
     def get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict:
         """
         Make a single authenticated GET request.
@@ -83,9 +93,7 @@ class KlaviyoClient:
         """
         url = API_BASE + path
         if params:
-            url += "?" + urllib.parse.urlencode(
-                {k: v for k, v in params.items() if v is not None}
-            )
+            url += "?" + self._build_qs({k: v for k, v in params.items() if v is not None})
 
         delay = _BACKOFF_INITIAL
         for attempt in range(_MAX_RETRIES):
@@ -158,9 +166,7 @@ class KlaviyoClient:
 
         url = API_BASE + path
         if params:
-            url += "?" + urllib.parse.urlencode(
-                {k: v for k, v in params.items() if v is not None}
-            )
+            url += "?" + self._build_qs({k: v for k, v in params.items() if v is not None})
 
         while url:
             req = urllib.request.Request(url, headers=self._headers(), method="GET")

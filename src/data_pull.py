@@ -204,38 +204,35 @@ def _pull_campaigns(client: KlaviyoClient, segment_ids: Set[str]) -> Dict[str, A
         flt = f"and(equals(messages.channel,'{channel_filter}'),greater-than(updated_at,{cutoff}))"
         for rec in client.paginate("/api/campaigns/", {"filter": flt}, page_size=None):
             attrs = rec.get("attributes", {})
-            status = attrs.get("status", "MISSING")
-            # Log first 20 campaigns to see real status values
-            if len(campaigns) < 20:
-                log.info("CAMP status=%r name=%s", status, attrs.get("name", "")[:40])
-            # Accept all statuses for now — status values unclear in 2024-02-15
-            # if status.lower() in ("draft", "scheduled", "cancelled", "canceled", ""):
-            #     continue
+            status = attrs.get("status", "")
+            # Skip unsent campaigns
+            if status.lower() in ("draft", "scheduled", "cancelled", "canceled", ""):
+                continue
 
-        # channel may be top-level or inside send_strategy
-        channel = (
-            attrs.get("channel")
-            or (attrs.get("send_strategy") or {}).get("method", "")
-            or "email"
-        ).lower()
-        if channel not in ("email", "sms"):
-            channel = "email"
-        audiences = attrs.get("audiences") or {}
-        included_ids: List[str] = audiences.get("included") or []
+            # channel may be top-level or inside send_strategy
+            channel = (
+                attrs.get("channel")
+                or (attrs.get("send_strategy") or {}).get("method", "")
+                or "email"
+            ).lower()
+            if channel not in ("email", "sms"):
+                channel = "email"
+            audiences = attrs.get("audiences") or {}
+            included_ids: List[str] = audiences.get("included") or []
 
-        # A campaign is "segmented" if any included audience is a segment (not just a list)
-        is_segmented = any(aid in segment_ids for aid in included_ids)
-        if is_segmented:
-            segmented_count += 1
+            # A campaign is "segmented" if any included audience is a segment (not just a list)
+            is_segmented = any(aid in segment_ids for aid in included_ids)
+            if is_segmented:
+                segmented_count += 1
 
-        campaigns.append({
-            "id": rec.get("id", ""),
-            "name": attrs.get("name", ""),
-            "channel": channel,
-            "send_time": attrs.get("scheduled_at") or attrs.get("send_time") or attrs.get("created_at"),
-            "audiences": audiences,
-            "is_segmented": is_segmented,
-        })
+            campaigns.append({
+                "id": rec.get("id", ""),
+                "name": attrs.get("name", ""),
+                "channel": channel,
+                "send_time": attrs.get("scheduled_at") or attrs.get("send_time") or attrs.get("created_at"),
+                "audiences": audiences,
+                "is_segmented": is_segmented,
+            })
 
     total = len(campaigns)
     pct_segmented = (segmented_count / total) if total > 0 else None

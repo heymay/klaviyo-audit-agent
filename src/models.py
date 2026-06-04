@@ -323,6 +323,8 @@ class AccountData:
     flows: List[FlowData] = field(default_factory=list)
     campaigns: CampaignData = field(default_factory=CampaignData)
     forms: List[FormData] = field(default_factory=list)
+    list_count: int = 0
+    segment_count: int = 0
     deliverability: DeliverabilityData = field(default_factory=DeliverabilityData)
     revenue: RevenueData = field(default_factory=RevenueData)
     billing: BillingData = field(default_factory=BillingData)

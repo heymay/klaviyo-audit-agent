@@ -91,7 +91,7 @@ export default async function ReportPage({
   const report = await getReport(id);
   if (!report) notFound();
 
-  const { account, composite_score, score_band, category_scores, findings, recommendations, opportunity, profile_metrics, campaign_metrics, deliverability } = report;
+  const { account, composite_score, score_band, category_scores, findings, recommendations, opportunity, profile_metrics, campaign_metrics, deliverability, segmentation, flows } = report;
 
   const critical = findings.filter((f) => f.severity === "Critical");
   const high = findings.filter((f) => f.severity === "High");
@@ -204,27 +204,18 @@ export default async function ReportPage({
           Key Account Metrics
         </h2>
         <div className="grid sm:grid-cols-2 gap-6">
+          {/* Account Structure — data confirmed via API */}
           <div>
             <h3 className="text-sm font-semibold text-gray-600 mb-2">
-              Profiles
+              Account Structure
             </h3>
             <div className="space-y-1 text-sm">
               {[
-                [
-                  "Total Profiles",
-                  profile_metrics.total_profiles.toLocaleString(),
-                ],
-                [
-                  "Emailable",
-                  profile_metrics.emailable_profiles.toLocaleString(),
-                ],
-                [
-                  "SMS Consented",
-                  profile_metrics.sms_consented_profiles.toLocaleString(),
-                ],
-                ["Suppressed", pct(profile_metrics.suppression_rate)],
-                ["Engaged 30d", pct(profile_metrics.engaged_30_pct)],
-                ["Engaged 90d", pct(profile_metrics.engaged_90_pct)],
+                ["Total Profiles", profile_metrics.total_profiles > 0 ? `${profile_metrics.total_profiles.toLocaleString()}+` : "—"],
+                ["Email Lists", (segmentation.list_count ?? 0) > 0 ? (segmentation.list_count ?? 0).toLocaleString() : "—"],
+                ["Segments", (segmentation.segment_count ?? 0) > 0 ? (segmentation.segment_count ?? 0).toLocaleString() : "—"],
+                ["Live Flows", flows.filter(f => f.status === "Live" || f.status === "Manual").length.toLocaleString()],
+                ["Total Flows", flows.length.toLocaleString()],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between">
                   <span className="text-np-gray">{k}</span>
@@ -233,21 +224,18 @@ export default async function ReportPage({
               ))}
             </div>
           </div>
+          {/* Campaign Performance — data confirmed via API */}
           <div>
             <h3 className="text-sm font-semibold text-gray-600 mb-2">
-              Campaigns & Deliverability
+              Campaign Performance
             </h3>
             <div className="space-y-1 text-sm">
               {[
-                ["Campaigns Sent", campaign_metrics.total_sent],
-                ["Sends/Week", fmt(campaign_metrics.campaigns_per_week)],
-                ["Avg Open Rate", pct(campaign_metrics.avg_open_rate)],
-                ["Avg Click Rate", pct(campaign_metrics.avg_click_rate)],
-                ["Hard Bounce", pct(deliverability.hard_bounce_rate)],
-                [
-                  "Spam Complaints",
-                  pct(deliverability.spam_complaint_rate),
-                ],
+                ["Campaigns Sent (12mo)", campaign_metrics.total_sent.toLocaleString()],
+                ["Email Campaigns", campaign_metrics.email_campaigns.toLocaleString()],
+                ["SMS Campaigns", campaign_metrics.sms_campaigns.toLocaleString()],
+                ["Sends / Week", fmt(campaign_metrics.campaigns_per_week)],
+                ["Engaged-Segment Rate", pct(campaign_metrics.pct_to_engaged_segments)],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between">
                   <span className="text-np-gray">{k}</span>
@@ -256,11 +244,10 @@ export default async function ReportPage({
               ))}
             </div>
             <div className="mt-3 flex gap-2 flex-wrap">
+              {/* Only show SPF and DMARC — confirmed via live DNS lookup */}
               {[
                 ["SPF", deliverability.has_spf],
-                ["DKIM", deliverability.has_dkim],
                 ["DMARC", deliverability.has_dmarc],
-                ["Branded Domain", deliverability.has_branded_sending_domain],
               ].map(([label, ok]) => (
                 <span
                   key={label as string}

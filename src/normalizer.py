@@ -56,6 +56,8 @@ def normalize(raw: Dict[str, Any], manual: Dict[str, Any], context: Dict[str, An
         revenue=revenue,
         billing=billing,
         segmentation=segmentation,
+        list_count=len(raw.get("lists", [])),
+        segment_count=len(raw.get("segments", [])),
     )
 
 

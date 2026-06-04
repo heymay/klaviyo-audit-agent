@@ -121,6 +121,8 @@ export interface SegmentationData {
   has_purchaser_segment: boolean;
   has_sunset_segment: boolean;
   pct_campaigns_to_engaged: number;
+  list_count?: number;
+  segment_count?: number;
 }
 
 export interface RevenueData {

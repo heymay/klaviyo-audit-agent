@@ -154,6 +154,8 @@ def audit_result_to_dict(result: AuditResult) -> Dict[str, Any]:
             "has_purchaser_segment": acct.segmentation.has_purchaser_segment,
             "has_sunset_segment": acct.segmentation.has_sunset_segment,
             "pct_campaigns_to_engaged": acct.segmentation.pct_campaigns_to_engaged,
+            "list_count": acct.list_count,
+            "segment_count": acct.segment_count,
         },
         "billing": {
             "plan_tier": acct.billing.plan_tier,

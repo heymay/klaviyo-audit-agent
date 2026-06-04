@@ -195,16 +195,17 @@ def _pull_campaigns(client: KlaviyoClient, segment_ids: Set[str]) -> Dict[str, A
     campaigns = []
     segmented_count = 0
 
-    # Limit to last 12 months — campaign history goes back years
+    # Limit to last 12 months using updated_at (always populated; scheduled_at is often NULL)
     from datetime import timezone as _tz, timedelta as _td
     cutoff = (datetime.now(_tz.utc) - _td(days=365)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
     # Klaviyo 2024-02-15 requires channel filter; rejects page[size]
     for channel_filter in ("email", "sms"):
-        flt = f"and(equals(messages.channel,'{channel_filter}'),greater-than(scheduled_at,{cutoff}))"
+        flt = f"and(equals(messages.channel,'{channel_filter}'),greater-than(updated_at,{cutoff}))"
         for rec in client.paginate("/api/campaigns/", {"filter": flt}, page_size=None):
             attrs = rec.get("attributes", {})
             status = attrs.get("status", "")
+            log.debug("CAMP status=%s name=%s", status, attrs.get("name", "")[:30])
             if status.lower() in ("draft", "scheduled", "cancelled", "canceled", ""):
                 continue
 

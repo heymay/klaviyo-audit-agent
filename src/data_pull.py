@@ -162,8 +162,8 @@ def _pull_account(client: KlaviyoClient) -> Dict:
 # ── Profiles ───────────────────────────────────────────────────────────────
 
 def _pull_total_profile_count(client: KlaviyoClient) -> int:
-    body = client.get("/api/profiles/", {"page[size]": 1})
-    log.info("DIAG profiles meta: %s", body.get("meta"))
+    body = client.get("/api/profiles/", {"page[size]": 10})
+    log.info("DIAG profiles meta=%s data_count=%d", body.get("meta"), len(body.get("data", [])))
     meta = body.get("meta") or {}
     # Try multiple locations Klaviyo uses across API revisions
     total = (
@@ -195,14 +195,16 @@ def _pull_campaigns(client: KlaviyoClient, segment_ids: Set[str]) -> Dict[str, A
     campaigns = []
     segmented_count = 0
 
-    # No fields filter — let Klaviyo return all fields; avoids 400 from invalid field names
+    all_statuses_seen: List[str] = []
+    # No fields filter — let Klaviyo return all fields
     for rec in client.paginate("/api/campaigns/"):
         attrs = rec.get("attributes", {})
-        status = attrs.get("status", "")
-        # Skip only clearly unsent statuses; accept anything else
+        status = attrs.get("status", "MISSING")
+        all_statuses_seen.append(status)
+        log.info("CAMP status=%s name=%s", status, attrs.get("name", "")[:40])
+        # Accept everything except clearly unsent — log but don't filter yet
         if status.lower() in ("draft", "scheduled", "cancelled", "canceled", ""):
             continue
-        log.debug("Campaign included: name=%s status=%s", attrs.get("name",""), status)
 
         # channel may be top-level or inside send_strategy
         channel = (
@@ -230,7 +232,9 @@ def _pull_campaigns(client: KlaviyoClient, segment_ids: Set[str]) -> Dict[str, A
         })
 
     total = len(campaigns)
-    pct_segmented = (segmented_count / total) if total > 0 else None  # None = unknown
+    pct_segmented = (segmented_count / total) if total > 0 else None
+    log.info("Campaigns: %d included out of %d total seen. All statuses: %s",
+             total, len(all_statuses_seen), list(set(all_statuses_seen)))
     log.info("Campaigns: %d sent, %d segmented (%.0f%%)",
              total, segmented_count, (pct_segmented or 0) * 100)
 

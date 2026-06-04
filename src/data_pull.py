@@ -195,9 +195,6 @@ def _pull_campaigns(client: KlaviyoClient, segment_ids: Set[str]) -> Dict[str, A
     campaigns = []
     segmented_count = 0
 
-    campaigns = []
-    segmented_count = 0
-
     # Limit to last 12 months — campaign history goes back years
     from datetime import timezone as _tz, timedelta as _td
     cutoff = (datetime.now(_tz.utc) - _td(days=365)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
@@ -238,8 +235,6 @@ def _pull_campaigns(client: KlaviyoClient, segment_ids: Set[str]) -> Dict[str, A
 
     total = len(campaigns)
     pct_segmented = (segmented_count / total) if total > 0 else None
-    log.info("Campaigns: %d included out of %d total seen. All statuses: %s",
-             total, len(all_statuses_seen), list(set(all_statuses_seen)))
     log.info("Campaigns: %d sent, %d segmented (%.0f%%)",
              total, segmented_count, (pct_segmented or 0) * 100)
 
@@ -381,20 +376,11 @@ def _pull_flows(client: KlaviyoClient) -> List[Dict]:
         flow_id = rec.get("id", "")
         status = _normalize_flow_status(attrs.get("status", ""))
 
-        # Pull messages for Live and Manual flows (both are "active" in Klaviyo)
+        # flow-messages endpoints return 404/405 in revision 2024-02-15.
+        # Flows are detected by name; message counts default to 0.
         messages = []
-        if False:  # flow-messages: nested=404, top-level=405 in 2024-02-15
-            pass     # flows detected by name; message counts unavailable
         if status in ("Live", "Manual"):
-            flow_message_calls += 1  # track count only
-            for msg in (msgs or []):
-                mattrs = msg.get("attributes", {})
-                messages.append({
-                    "channel": mattrs.get("channel", "email"),
-                    "position": mattrs.get("position", 1),
-                    "delay_minutes": 0,
-                    "has_discount": False,
-                })
+            flow_message_calls += 1
 
         flows.append({
             "flow_id": flow_id,

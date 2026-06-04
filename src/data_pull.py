@@ -204,10 +204,13 @@ def _pull_campaigns(client: KlaviyoClient, segment_ids: Set[str]) -> Dict[str, A
         flt = f"and(equals(messages.channel,'{channel_filter}'),greater-than(updated_at,{cutoff}))"
         for rec in client.paginate("/api/campaigns/", {"filter": flt}, page_size=None):
             attrs = rec.get("attributes", {})
-            status = attrs.get("status", "")
-            log.debug("CAMP status=%s name=%s", status, attrs.get("name", "")[:30])
-            if status.lower() in ("draft", "scheduled", "cancelled", "canceled", ""):
-                continue
+            status = attrs.get("status", "MISSING")
+            # Log first 20 campaigns to see real status values
+            if len(campaigns) < 20:
+                log.info("CAMP status=%r name=%s", status, attrs.get("name", "")[:40])
+            # Accept all statuses for now — status values unclear in 2024-02-15
+            # if status.lower() in ("draft", "scheduled", "cancelled", "canceled", ""):
+            #     continue
 
         # channel may be top-level or inside send_strategy
         channel = (

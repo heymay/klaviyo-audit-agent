@@ -412,7 +412,7 @@ def _pull_flows(client: KlaviyoClient) -> List[Dict]:
 
 def _pull_lists(client: KlaviyoClient) -> List[Dict]:
     lists = []
-    for rec in client.paginate("/api/lists/", {"fields[list]": "name,created"}):
+    for rec in client.paginate("/api/lists/"):
         attrs = rec.get("attributes", {})
         lists.append({
             "id": rec.get("id", ""),
@@ -425,7 +425,7 @@ def _pull_lists(client: KlaviyoClient) -> List[Dict]:
 
 def _pull_segments(client: KlaviyoClient) -> List[Dict]:
     segments = []
-    for rec in client.paginate("/api/segments/", {"fields[segment]": "name,created"}):
+    for rec in client.paginate("/api/segments/"):
         attrs = rec.get("attributes", {})
         segments.append({
             "id": rec.get("id", ""),

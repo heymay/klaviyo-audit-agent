@@ -132,7 +132,7 @@ class KlaviyoClient:
         """Yield every record from a paginated Klaviyo endpoint."""
         p = dict(params or {})
         if "page[size]" not in p:
-            p["page[size]"] = 100
+            p["page[size]"] = 10  # Klaviyo max is 10 for most endpoints
 
         # First page uses path + params; subsequent pages use absolute links.next URL
         next_url: Optional[str] = None

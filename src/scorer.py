@@ -313,15 +313,20 @@ def _score_sms_adoption(acct: AccountData) -> CategoryScore:
     p = acct.profiles
     sms_rate = p.sms_consent_rate
 
-    if sms_rate < 0.05:
-        score -= 3
-        penalties.append(f"SMS consent rate {sms_rate:.1%} < 5% (very low)")
-    elif sms_rate < 0.15:
-        score -= 1
-        penalties.append(f"SMS consent rate {sms_rate:.1%} < 15%")
-    elif sms_rate >= 0.30:
-        score += 1
-        bonuses.append(f"SMS consent rate {sms_rate:.1%} ≥ 30%")
+    # SMS consent counts require profile segment queries — unavailable via basic API
+    # Only penalise if we have actual profile data showing a real low rate
+    if p.emailable_profiles > 0 and p.sms_consented_profiles > 0:
+        if sms_rate < 0.05:
+            score -= 3
+            penalties.append(f"SMS consent rate {sms_rate:.1%} < 5% (very low)")
+        elif sms_rate < 0.15:
+            score -= 1
+            penalties.append(f"SMS consent rate {sms_rate:.1%} < 15%")
+        elif sms_rate >= 0.30:
+            score += 1
+            bonuses.append(f"SMS consent rate {sms_rate:.1%} ≥ 30%")
+    else:
+        bonuses.append("SMS consent count unavailable via API — not penalised")
 
     # flow-messages unavailable via API — use SMS campaigns as proxy for SMS usage
     sms_in_flows = any(f.sms_count > 0 for f in acct.live_flows)
@@ -367,13 +372,15 @@ def _score_signup_forms(acct: AccountData) -> CategoryScore:
     forms = acct.active_forms
 
     if not forms:
+        # Forms API unavailable in this Klaviyo API revision — can't confirm or deny
+        # Score neutrally rather than penalising for missing data
         return CategoryScore(
             name="Signup Forms & List Growth",
-            score=1,
+            score=5,
             weight=WEIGHTS["Signup Forms & List Growth"],
-            justification="No published signup forms found.",
-            penalties_applied=["No active forms (cap: 1)"],
-            bonuses_applied=[],
+            justification="Signup form data unavailable via Klaviyo API (endpoint requires newer revision). Unable to score.",
+            penalties_applied=[],
+            bonuses_applied=["Score held at neutral (5) — data not available via API"],
         )
 
     score = 6
@@ -436,13 +443,14 @@ def _score_list_health(acct: AccountData) -> CategoryScore:
     score = 7
 
     if p.emailable_profiles == 0:
+        # Profile engagement data unavailable via Klaviyo API
         return CategoryScore(
             name="List Health & Engagement",
-            score=1,
+            score=5,
             weight=WEIGHTS["List Health & Engagement"],
-            justification="No emailable profiles found.",
-            penalties_applied=["No emailable profiles"],
-            bonuses_applied=[],
+            justification="Profile engagement data unavailable via Klaviyo API (requires aggregate queries). Score held at neutral.",
+            penalties_applied=[],
+            bonuses_applied=["Score held at neutral (5) — engagement data not available via API"],
         )
 
     # Suppression rate
@@ -464,12 +472,15 @@ def _score_list_health(acct: AccountData) -> CategoryScore:
         score -= 1
         penalties.append(f"Dormant rate {p.dormant_rate:.1%} ≥ 25%")
 
-    # Engagement rates
-    if p.engaged_30_pct >= 0.20:
-        bonuses.append(f"30-day engagement {p.engaged_30_pct:.1%} ≥ 20% (strong active segment)")
-    elif p.engaged_30_pct < 0.05:
-        score -= 1
-        penalties.append(f"30-day engagement only {p.engaged_30_pct:.1%} < 5%")
+    # Engagement rates — only score if we have actual engagement data
+    if p.engaged_30_day > 0:
+        if p.engaged_30_pct >= 0.20:
+            bonuses.append(f"30-day engagement {p.engaged_30_pct:.1%} ≥ 20% (strong active segment)")
+        elif p.engaged_30_pct < 0.05:
+            score -= 1
+            penalties.append(f"30-day engagement only {p.engaged_30_pct:.1%} < 5%")
+    else:
+        bonuses.append("Engagement segment data unavailable via API — not penalised")
 
     if p.engaged_90_pct >= 0.35:
         bonuses.append(f"90-day engagement {p.engaged_90_pct:.1%} ≥ 35%")

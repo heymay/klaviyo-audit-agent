@@ -197,16 +197,17 @@ def _pull_campaigns(client: KlaviyoClient, segment_ids: Set[str]) -> Dict[str, A
 
     campaigns = []
     segmented_count = 0
-    all_statuses_seen: List[str] = []
 
-    # Klaviyo 2024-02-15 requires a channel filter on /api/campaigns/
+    # Limit to last 12 months — campaign history goes back years
+    from datetime import timezone as _tz, timedelta as _td
+    cutoff = (datetime.now(_tz.utc) - _td(days=365)).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
+    # Klaviyo 2024-02-15 requires channel filter; rejects page[size]
     for channel_filter in ("email", "sms"):
-        for rec in client.paginate("/api/campaigns/", {
-            "filter": f"equals(messages.channel,'{channel_filter}')",
-        }, page_size=None):  # campaigns endpoint rejects page[size]
+        flt = f"and(equals(messages.channel,'{channel_filter}'),greater-than(scheduled_at,{cutoff}))"
+        for rec in client.paginate("/api/campaigns/", {"filter": flt}, page_size=None):
             attrs = rec.get("attributes", {})
-            status = attrs.get("status", "MISSING")
-            all_statuses_seen.append(status)
+            status = attrs.get("status", "")
             if status.lower() in ("draft", "scheduled", "cancelled", "canceled", ""):
                 continue
 
@@ -487,27 +488,6 @@ def pull_all(client: KlaviyoClient, website: str = "", progress_cb=None) -> Dict
     segment_ids: Set[str] = {s["id"] for s in (segments_raw or [])}
 
     _p(25, "Pulling campaigns & analysing segmentation…")
-    # Diagnostic: log first raw page of campaigns
-    try:
-        _raw_camp = client.get("/api/campaigns/", {"page[size]": 3})
-        _camp_data = _raw_camp.get("data", [])
-        log.info("DIAG campaigns raw: total_records=%d first_statuses=%s",
-                 len(_camp_data),
-                 [r.get("attributes", {}).get("status") for r in _camp_data])
-    except Exception as _e:
-        log.error("DIAG campaigns raw fetch failed: %s", _e)
-
-    # Diagnostic: log first raw page of flows
-    try:
-        _raw_flow = client.get("/api/flows/", {"page[size]": 3})
-        _flow_data = _raw_flow.get("data", [])
-        log.info("DIAG flows raw: total_records=%d first_statuses=%s first_names=%s",
-                 len(_flow_data),
-                 [r.get("attributes", {}).get("status") for r in _flow_data],
-                 [r.get("attributes", {}).get("name") for r in _flow_data])
-    except Exception as _e:
-        log.error("DIAG flows raw fetch failed: %s", _e)
-
     campaign_result = _safe_pull(
         "campaigns",
         lambda: _pull_campaigns(client, segment_ids),

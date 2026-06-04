@@ -128,11 +128,13 @@ class KlaviyoClient:
     def get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Dict:
         return self._request(path, params)
 
-    def paginate(self, path: str, params: Optional[Dict[str, Any]] = None) -> Iterator[Dict]:
-        """Yield every record from a paginated Klaviyo endpoint."""
+    def paginate(self, path: str, params: Optional[Dict[str, Any]] = None,
+                 page_size: Optional[int] = 10) -> Iterator[Dict]:
+        """Yield every record from a paginated Klaviyo endpoint.
+        Set page_size=None to omit the page[size] param (required for campaigns)."""
         p = dict(params or {})
-        if "page[size]" not in p:
-            p["page[size]"] = 10  # Klaviyo max is 10 for most endpoints
+        if page_size is not None and "page[size]" not in p:
+            p["page[size]"] = page_size
 
         # First page uses path + params; subsequent pages use absolute links.next URL
         next_url: Optional[str] = None

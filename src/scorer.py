@@ -178,46 +178,35 @@ def _score_flow_configuration(acct: AccountData) -> CategoryScore:
             bonuses_applied=[],
         )
 
-    # Welcome flow — check timing and email count
+    # NOTE: flow message counts (email_count, sms_count) are unavailable in
+    # Klaviyo API 2024-02-15 — flow-messages endpoints return 404/405.
+    # Only evaluate timing, stale status, and presence — not message counts.
+    has_message_data = any(len(f.messages) > 0 for f in live_flows)
+
     welcome = acct.get_flow("welcome")
-    if welcome:
+    if welcome and has_message_data:
         if welcome.first_message_delay_minutes > 60:
             score -= 2
             penalties.append(
                 f"Welcome first email delayed {welcome.first_message_delay_minutes}min (>60min threshold)"
             )
-        if welcome.email_count < 3:
-            score -= 1
-            penalties.append(f"Welcome flow has only {welcome.email_count} email(s) (<3 recommended)")
-        elif welcome.email_count >= 5:
-            bonuses.append(f"Welcome flow has {welcome.email_count} emails (strong series)")
 
-    # Abandoned cart — check email count and incentive
     ac = acct.get_flow("abandoned_cart")
-    if ac:
-        if ac.email_count < 2:
-            score -= 2
-            penalties.append(f"Abandoned cart has only {ac.email_count} email(s) (<2 is weak)")
+    if ac and has_message_data:
         if not ac.has_incentive:
             score -= 1
             penalties.append("Abandoned cart flow has no discount/incentive")
         else:
             bonuses.append("Abandoned cart includes an incentive")
 
-    # Post-purchase — check SMS
-    if acct.sms_enabled:
-        has_sms_in_flows = any(f.sms_count > 0 for f in live_flows)
-        if not has_sms_in_flows:
-            score -= 2
-            penalties.append("SMS enabled but no SMS messages in any live flow")
-        else:
-            bonuses.append("SMS messages present in flows")
+    if not has_message_data:
+        bonuses.append(f"{len(live_flows)} live flows detected (message detail unavailable via API)")
 
-    # Stale flows — updated > 180 days ago
-    stale = [f for f in live_flows if f.last_updated_days_ago > 180]
+    # Stale flows — only penalise if clearly neglected (>365 days, not 180)
+    stale = [f for f in live_flows if f.last_updated_days_ago > 365]
     if stale:
         score -= 1
-        penalties.append(f"{len(stale)} live flow(s) not updated in >180 days")
+        penalties.append(f"{len(stale)} live flow(s) not updated in >1 year")
 
     score = max(1, min(10, score))
     total_emails = sum(f.email_count for f in live_flows)
@@ -334,12 +323,14 @@ def _score_sms_adoption(acct: AccountData) -> CategoryScore:
         score += 1
         bonuses.append(f"SMS consent rate {sms_rate:.1%} ≥ 30%")
 
+    # flow-messages unavailable via API — use SMS campaigns as proxy for SMS usage
     sms_in_flows = any(f.sms_count > 0 for f in acct.live_flows)
-    if not sms_in_flows:
+    has_sms_campaigns = acct.campaigns.sms_campaigns > 0
+    if not sms_in_flows and not has_sms_campaigns:
         score -= 2
-        penalties.append("No SMS messages in any live flow")
-    else:
-        bonuses.append("SMS messages present in flows")
+        penalties.append("No SMS messages in flows or SMS campaigns found")
+    elif has_sms_campaigns:
+        bonuses.append(f"{acct.campaigns.sms_campaigns} SMS campaigns sent (flow detail unavailable)")
 
     if acct.campaigns.sms_campaigns == 0:
         score -= 1

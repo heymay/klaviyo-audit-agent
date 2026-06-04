@@ -14,7 +14,7 @@ from typing import Any, Dict, Iterator, List, Optional
 import httpx
 
 API_BASE = "https://a.klaviyo.com"
-REVISION = "2024-02-15"
+REVISION = "2024-10-15"
 
 _BACKOFF_INITIAL = 2.0
 _BACKOFF_MAX = 32.0

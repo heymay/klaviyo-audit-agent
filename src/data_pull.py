@@ -209,14 +209,8 @@ def _pull_campaigns(client: KlaviyoClient, segment_ids: Set[str]) -> Dict[str, A
             if status.lower() in ("draft", "scheduled", "cancelled", "canceled", ""):
                 continue
 
-            # channel may be top-level or inside send_strategy
-            channel = (
-                attrs.get("channel")
-                or (attrs.get("send_strategy") or {}).get("method", "")
-                or "email"
-            ).lower()
-            if channel not in ("email", "sms"):
-                channel = "email"
+            # Use the filter channel directly — we filtered by it, so it's authoritative
+            channel = channel_filter
             audiences = attrs.get("audiences") or {}
             included_ids: List[str] = audiences.get("included") or []
 

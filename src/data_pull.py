@@ -162,8 +162,9 @@ def _pull_account(client: KlaviyoClient) -> Dict:
 # ── Profiles ───────────────────────────────────────────────────────────────
 
 def _pull_total_profile_count(client: KlaviyoClient) -> int:
-    body = client.get("/api/profiles/", {"page[size]": 10})
-    log.info("DIAG profiles meta=%s data_count=%d", body.get("meta"), len(body.get("data", [])))
+    body = client.get("/api/profiles/", {"page[size]": 10, "additional-fields[profile]": "predictive_analytics"})
+    log.info("DIAG profiles keys=%s meta=%s links=%s data_count=%d",
+             list(body.keys()), body.get("meta"), body.get("links"), len(body.get("data", [])))
     meta = body.get("meta") or {}
     # Try multiple locations Klaviyo uses across API revisions
     total = (
@@ -195,16 +196,20 @@ def _pull_campaigns(client: KlaviyoClient, segment_ids: Set[str]) -> Dict[str, A
     campaigns = []
     segmented_count = 0
 
+    campaigns = []
+    segmented_count = 0
     all_statuses_seen: List[str] = []
-    # No fields filter — let Klaviyo return all fields
-    for rec in client.paginate("/api/campaigns/"):
-        attrs = rec.get("attributes", {})
-        status = attrs.get("status", "MISSING")
-        all_statuses_seen.append(status)
-        log.info("CAMP status=%s name=%s", status, attrs.get("name", "")[:40])
-        # Accept everything except clearly unsent — log but don't filter yet
-        if status.lower() in ("draft", "scheduled", "cancelled", "canceled", ""):
-            continue
+
+    # Klaviyo 2024-02-15 requires a channel filter on /api/campaigns/
+    for channel_filter in ("email", "sms"):
+        for rec in client.paginate("/api/campaigns/", {
+            "filter": f"equals(messages.channel,'{channel_filter}')",
+        }):
+            attrs = rec.get("attributes", {})
+            status = attrs.get("status", "MISSING")
+            all_statuses_seen.append(status)
+            if status.lower() in ("draft", "scheduled", "cancelled", "canceled", ""):
+                continue
 
         # channel may be top-level or inside send_strategy
         channel = (
@@ -379,11 +384,13 @@ def _pull_flows(client: KlaviyoClient) -> List[Dict]:
         # Pull messages for Live and Manual flows (both are "active" in Klaviyo)
         messages = []
         if status in ("Live", "Manual") and flow_message_calls < _MAX_FLOW_MESSAGE_CALLS:
+            # 2024-02-15: use top-level /api/flow-messages/ with filter
+            # (nested /api/flows/{id}/flow-messages/ returns 404 in this revision)
             msgs = _safe_pull(
                 f"flow-messages/{flow_id}",
                 lambda fid=flow_id: list(client.paginate(
-                    f"/api/flows/{fid}/flow-messages/",
-                    {"fields[flow-message]": "channel,position,action_type"},
+                    "/api/flow-messages/",
+                    {"filter": f"equals(flow.id,'{fid}')"},
                 )),
                 fallback=[],
             )

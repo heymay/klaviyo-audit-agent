@@ -35,7 +35,7 @@ export default function AuditForm() {
     website: "",
     ecommerce_platform: "Shopify",
     monthly_revenue_range: "$50K–$150K/mo",
-    sms_enabled: false,
+    sms_enabled: true,
   });
 
   function set(field: string, value: string | boolean) {

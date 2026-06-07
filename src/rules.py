@@ -206,14 +206,10 @@ def _rules_deliverability(acct: AccountData) -> List[Finding]:
             "High",
         ))
 
-    if not d.has_dkim:
-        findings.append(_f(
-            "DELV-005", "Critical", "Deliverability",
-            "DKIM is not configured for this sending domain.",
-            "Without DKIM, emails fail authentication checks — ISPs are more likely to filter or reject them.",
-            "Configure DKIM in Klaviyo (Settings → Email → Sending Domain) immediately. Required by Google/Yahoo.",
-            "Critical", "-2 points Deliverability",
-        ))
+    # DKIM: DNS lookup checks selectors k1/k2/klaviyo1 on the apex domain.
+    # Many Klaviyo accounts use different selectors or sending subdomains —
+    # suppress to avoid false positives.
+    # if not d.has_dkim: (suppressed — unreliable DNS detection)
 
     if not d.has_spf:
         findings.append(_f(
@@ -233,14 +229,8 @@ def _rules_deliverability(acct: AccountData) -> List[Finding]:
             "High", "-1 point Deliverability",
         ))
 
-    if not d.has_branded_sending_domain:
-        findings.append(_f(
-            "DELV-008", "Medium", "Deliverability",
-            "Email is sent from a shared Klaviyo domain rather than a branded sending domain.",
-            "Shared domains carry reputation risk from other senders. Branded domains improve deliverability and brand trust.",
-            "Set up a dedicated sending subdomain (e.g., mail.yourbrand.com) in Klaviyo.",
-            "Medium", "-1 point Deliverability",
-        ))
+    # Branded sending domain: cannot reliably detect via DNS — suppress
+    # if not d.has_branded_sending_domain: (suppressed — not detectable via API)
 
     if d.avg_unsubscribe_rate >= 0.005:
         findings.append(_f(

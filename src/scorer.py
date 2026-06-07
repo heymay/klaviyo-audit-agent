@@ -46,7 +46,8 @@ def _score_deliverability(acct: AccountData) -> CategoryScore:
     bonuses: List[str] = []
     score = 10
 
-    # Hard bounce — Critical ≥ 2%, High ≥ 1%, Medium ≥ 0.5%
+    # Bounce/spam/unsub rates require Klaviyo metrics API — unavailable.
+    # Only score these if we have real non-zero values (not API fallback zeros).
     if d.hard_bounce_rate >= 0.02:
         score = min(score, 2)
         penalties.append(f"Hard bounce rate {d.hard_bounce_rate:.1%} ≥ 2% (Critical cap: 2)")
@@ -57,7 +58,6 @@ def _score_deliverability(acct: AccountData) -> CategoryScore:
         score -= 1
         penalties.append(f"Hard bounce rate {d.hard_bounce_rate:.1%} ≥ 0.5%")
 
-    # Spam complaint — Critical ≥ 0.1%, High ≥ 0.08%
     if d.spam_complaint_rate >= 0.001:
         score = min(score, 2)
         penalties.append(f"Spam complaint rate {d.spam_complaint_rate:.3%} ≥ 0.1% (Critical cap: 2)")
@@ -65,44 +65,49 @@ def _score_deliverability(acct: AccountData) -> CategoryScore:
         score -= 3
         penalties.append(f"Spam complaint rate {d.spam_complaint_rate:.3%} ≥ 0.08%")
 
-    # Unsubscribe rate — High ≥ 0.5%
     if d.avg_unsubscribe_rate >= 0.005:
         score -= 2
         penalties.append(f"Unsubscribe rate {d.avg_unsubscribe_rate:.2%} ≥ 0.5%")
 
-    # Authentication setup
-    if not d.has_dkim:
-        score -= 2
-        penalties.append("Missing DKIM")
+    # DNS authentication — SPF and DMARC confirmed via live DNS lookup
     if not d.has_spf:
         score -= 1
-        penalties.append("Missing SPF")
+        penalties.append("Missing SPF record")
+    else:
+        bonuses.append("SPF configured ✓")
+
     if not d.has_dmarc:
         score -= 1
-        penalties.append("Missing DMARC")
-    if not d.has_branded_sending_domain:
-        score -= 1
-        penalties.append("No branded sending domain")
+        penalties.append("Missing DMARC policy")
+    else:
+        bonuses.append("DMARC configured ✓")
 
-    # Open rate trend bonus/penalty
-    if d.open_rate_trend == "improving":
-        score += 1
-        bonuses.append("Open rate trend improving")
-    elif d.open_rate_trend == "declining":
-        score -= 1
-        penalties.append("Open rate trend declining")
+    # DKIM and Branded Domain: not reliably detectable via DNS in current setup
+    # — do not penalise for these
 
     score = max(1, min(10, score))
 
-    # Bonus: all authentication configured
-    if d.has_spf and d.has_dkim and d.has_dmarc and d.has_branded_sending_domain:
-        bonuses.append("Full email authentication stack (SPF + DKIM + DMARC + branded domain)")
+    # Build justification with only confirmed data
+    dns_parts = []
+    if d.has_spf:
+        dns_parts.append("SPF ✓")
+    if d.has_dmarc:
+        dns_parts.append("DMARC ✓")
 
-    justification = (
-        f"Bounce: {d.hard_bounce_rate:.2%} | Spam: {d.spam_complaint_rate:.3%} | "
-        f"Unsub: {d.avg_unsubscribe_rate:.2%} | "
-        f"SPF:{d.has_spf} DKIM:{d.has_dkim} DMARC:{d.has_dmarc} Branded:{d.has_branded_sending_domain}"
-    )
+    rate_parts = []
+    if d.hard_bounce_rate > 0:
+        rate_parts.append(f"Bounce: {d.hard_bounce_rate:.2%}")
+    if d.spam_complaint_rate > 0:
+        rate_parts.append(f"Spam: {d.spam_complaint_rate:.3%}")
+    if d.avg_unsubscribe_rate > 0:
+        rate_parts.append(f"Unsub: {d.avg_unsubscribe_rate:.2%}")
+
+    justification_parts = rate_parts + dns_parts
+    if not rate_parts:
+        justification_parts = ["Bounce/spam/unsub data unavailable via API"] + dns_parts
+
+    justification = " | ".join(justification_parts)
+
     return CategoryScore(
         name="Deliverability Health",
         score=score,

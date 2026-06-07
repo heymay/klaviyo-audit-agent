@@ -72,15 +72,17 @@ def _rules_sms(acct: AccountData) -> List[Finding]:
             "Medium",
         ))
 
-    sms_form = any(f.collects_sms for f in acct.active_forms)
-    if not sms_form:
-        findings.append(_f(
-            "SMS-006", "Medium", "SMS Adoption",
-            "No active signup form collects SMS consent.",
-            "SMS list growth stalls without a capture mechanism at the top of the funnel.",
-            "Update at least one popup form to offer SMS opt-in alongside email. Test a dual-channel incentive.",
-            "Medium",
-        ))
+    # Only fire SMS form finding if we actually have form data
+    if acct.active_forms:
+        sms_form = any(f.collects_sms for f in acct.active_forms)
+        if not sms_form:
+            findings.append(_f(
+                "SMS-006", "Medium", "SMS Adoption",
+                "No active signup form collects SMS consent.",
+                "SMS list growth stalls without a capture mechanism at the top of the funnel.",
+                "Update at least one popup form to offer SMS opt-in alongside email. Test a dual-channel incentive.",
+                "Medium",
+            ))
 
     return findings
 
@@ -372,13 +374,8 @@ def _rules_forms(acct: AccountData) -> List[Finding]:
     forms = acct.active_forms
 
     if not forms:
-        findings.append(_f(
-            "FORM-001", "Critical", "Signup Forms",
-            "No active signup forms found in this Klaviyo account.",
-            "Without a signup form, the brand cannot grow its list organically. List growth is the foundation of email revenue.",
-            "Create and publish at least one popup signup form with a lead magnet or first-order discount.",
-            "Critical", "-cap Signup Forms to 1/10",
-        ))
+        # Forms endpoint unavailable in current Klaviyo API revision —
+        # cannot confirm or deny form presence. Suppress this finding.
         return findings
 
     primary = acct.primary_form

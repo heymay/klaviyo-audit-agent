@@ -331,12 +331,17 @@ def _build_segmentation(raw: Dict, manual: Dict):
 # ── SMS detection ──────────────────────────────────────────────────────────
 
 def _resolve_sms_enabled(raw: Dict, manual: Dict, flows: list, campaigns) -> bool:
-    # Manual override takes precedence
-    ctx_sms = manual.get("account_context", {}).get("sms_enabled")
-    if ctx_sms is not None:
-        return bool(ctx_sms)
-    # Infer from data: any SMS flow messages or SMS campaigns
+    # Always infer from API data first — SMS campaigns are definitive proof
     has_sms_flow = any(f.sms_count > 0 for f in flows)
     has_sms_camp = campaigns.sms_campaigns > 0
     has_sms_profiles = manual.get("profiles", {}).get("sms_consented_profiles", 0) > 0
-    return has_sms_flow or has_sms_camp or has_sms_profiles
+
+    if has_sms_flow or has_sms_camp or has_sms_profiles:
+        return True  # API data confirms SMS — form toggle cannot override this
+
+    # No API evidence of SMS — fall back to the form toggle
+    ctx_sms = manual.get("account_context", {}).get("sms_enabled")
+    if ctx_sms is not None:
+        return bool(ctx_sms)
+
+    return False

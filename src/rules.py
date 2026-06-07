@@ -544,6 +544,12 @@ def _rules_revenue(acct: AccountData) -> List[Finding]:
     findings: List[Finding] = []
     r = acct.revenue
 
+    # Revenue data unavailable via Klaviyo API — suppress all revenue findings
+    # to avoid false reports. Revenue requires metric aggregate queries not
+    # available in the current API read scope.
+    if r.total_klaviyo_revenue == 0:
+        return findings
+
     if not r.revenue_attribution_configured:
         findings.append(_f(
             "REV-001", "Critical", "Revenue Attribution",

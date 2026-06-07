@@ -600,11 +600,19 @@ def _score_revenue_attribution(acct: AccountData) -> CategoryScore:
         penalties.append(f"Benchmark overall rating: {overall}")
 
     score = max(1, min(10, score))
-    justification = (
-        f"Total Klaviyo revenue: ${r.total_klaviyo_revenue:,.0f} | "
-        f"Flow: {r.flow_revenue_pct:.0%} | Campaign: {r.campaign_revenue_pct:.0%} | "
-        f"Benchmark overall: {b.overall_rating}"
-    )
+
+    # Revenue figures unavailable via Klaviyo API (requires metric aggregates)
+    if r.total_klaviyo_revenue == 0:
+        justification = (
+            "Revenue attribution data unavailable via API — "
+            "requires Klaviyo metric aggregates endpoint. Score held at neutral."
+        )
+    else:
+        justification = (
+            f"Total Klaviyo revenue: ${r.total_klaviyo_revenue:,.0f} | "
+            f"Flow: {r.flow_revenue_pct:.0%} | Campaign: {r.campaign_revenue_pct:.0%} | "
+            f"Benchmark overall: {b.overall_rating}"
+        )
     return CategoryScore(
         name="Revenue Attribution",
         score=score,

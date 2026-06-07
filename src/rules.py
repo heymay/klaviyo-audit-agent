@@ -127,7 +127,11 @@ def _rules_campaigns(acct: AccountData) -> List[Finding]:
             "High", "-1 point Campaign Strategy",
         ))
 
-    if c.avg_open_rate < 0.15:
+    # CAMP-005: only fire on real open rate data, not the 25% fallback
+    # (metrics API unavailable — 0.25 is a neutral default, not a real rate)
+    # We detect fallback by checking if the rate is exactly our default values
+    open_rate_is_real = c.avg_open_rate not in (0.0, 0.25)
+    if open_rate_is_real and c.avg_open_rate < 0.15:
         findings.append(_f(
             "CAMP-005", "High", "Campaign Strategy",
             f"Average campaign open rate is {c.avg_open_rate:.1%} — below the 15% critical threshold.",
@@ -286,7 +290,8 @@ def _rules_flows(acct: AccountData) -> List[Finding]:
             "Critical", "-cap Core Flow Coverage to 4/10",
         ))
     else:
-        if ac.email_count < 2:
+        # FLOW-005: only fire if we have actual message data (email_count > 0 means API returned it)
+        if ac.email_count > 0 and ac.email_count < 2:
             findings.append(_f(
                 "FLOW-005", "High", "Core Flows",
                 f"Abandoned Cart flow has only {ac.email_count} email(s) — single-touch recovery is suboptimal.",
@@ -445,24 +450,28 @@ def _rules_list_health(acct: AccountData) -> List[Finding]:
             "High",
         ))
 
-    if p.dormant_rate >= 0.60:
-        findings.append(_f(
-            "LIST-003", "Critical", "List Health",
-            f"Dormant profile rate is {p.dormant_rate:.1%} — more than 60% of emailable profiles have not engaged in 180 days.",
-            f"Sending to {p.dormant_profiles:,} dormant profiles damages deliverability and wastes budget.",
-            "Immediately suppress all sends to 180+ day non-engagers. Run a winback campaign before final suppression.",
-            "Critical",
-        ))
-    elif p.dormant_rate >= 0.40:
-        findings.append(_f(
-            "LIST-004", "High", "List Health",
-            f"Dormant rate is {p.dormant_rate:.1%} — a large portion of the list is cold.",
-            "Cold profiles inflate list size metrics without contributing to engagement or revenue.",
-            "Launch a re-engagement campaign for 90–180 day non-openers. Suppress those who don't respond.",
-            "High",
-        ))
+    # Dormant/engagement rules require 180-day engagement data — unavailable via API.
+    # engaged_180_day defaults to 0, making dormant_rate = 100% which is false.
+    # Only fire these if we have real engagement data.
+    if p.engaged_180_day > 0:
+        if p.dormant_rate >= 0.60:
+            findings.append(_f(
+                "LIST-003", "Critical", "List Health",
+                f"Dormant profile rate is {p.dormant_rate:.1%} — more than 60% of emailable profiles have not engaged in 180 days.",
+                f"Sending to {p.dormant_profiles:,} dormant profiles damages deliverability and wastes budget.",
+                "Immediately suppress all sends to 180+ day non-engagers. Run a winback campaign before final suppression.",
+                "Critical",
+            ))
+        elif p.dormant_rate >= 0.40:
+            findings.append(_f(
+                "LIST-004", "High", "List Health",
+                f"Dormant rate is {p.dormant_rate:.1%} — a large portion of the list is cold.",
+                "Cold profiles inflate list size metrics without contributing to engagement or revenue.",
+                "Launch a re-engagement campaign for 90–180 day non-openers. Suppress those who don't respond.",
+                "High",
+            ))
 
-    if p.engaged_30_pct < 0.05:
+    if p.engaged_30_day > 0 and p.engaged_30_pct < 0.05:
         findings.append(_f(
             "LIST-005", "High", "List Health",
             f"Only {p.engaged_30_pct:.1%} of emailable profiles opened in the last 30 days.",

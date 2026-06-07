@@ -214,13 +214,8 @@ def _score_flow_configuration(acct: AccountData) -> CategoryScore:
         penalties.append(f"{len(stale)} live flow(s) not updated in >1 year")
 
     score = max(1, min(10, score))
-    total_emails = sum(f.email_count for f in live_flows)
-    total_sms = sum(f.sms_count for f in live_flows)
-
-    justification = (
-        f"{len(live_flows)} live flows | {total_emails} total emails | {total_sms} total SMS | "
-        f"{len(stale)} stale (>180d)"
-    )
+    stale_label = f"{len(stale)} stale (>1yr)" if stale else "no stale flows"
+    justification = f"{len(live_flows)} live flows | {len(acct.flows)} total | {stale_label} | message detail unavailable via API"
     return CategoryScore(
         name="Flow Configuration Quality",
         score=score,
@@ -285,9 +280,10 @@ def _score_campaign_strategy(acct: AccountData) -> CategoryScore:
         penalties.append(f"Longest campaign gap was {c.longest_gap_days} days (>30)")
 
     score = max(1, min(10, score))
+    # Only show confirmed real data — open/click/spam rates unavailable via API
     justification = (
-        f"{c.campaigns_per_week:.1f} campaigns/wk | Open: {c.avg_open_rate:.1%} | "
-        f"Click: {c.avg_click_rate:.1%} | Spam: {c.avg_spam_complaint_rate:.3%} | "
+        f"{c.campaigns_per_week:.1f} campaigns/wk | "
+        f"Email: {c.email_campaigns} | SMS: {c.sms_campaigns} | "
         f"Engaged-segment rate: {c.pct_to_engaged_segments:.0%}"
     )
     return CategoryScore(
